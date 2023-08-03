@@ -33,3 +33,4 @@ function(add_exe name)
 endfunction()
 
 add_exe(mask)
+add_exe(viewer_3d)
