@@ -34,3 +34,4 @@ endfunction()
 
 add_exe(mask)
 add_exe(viewer_3d)
+add_exe(viewer_four_planes)
