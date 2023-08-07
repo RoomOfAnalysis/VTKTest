@@ -112,13 +112,15 @@ int main(int argc, char* argv[])
     std::cout << nii_img_data->GetDimensions()[0] << ", " << nii_img_data->GetDimensions()[1] << ", "
               << nii_img_data->GetDimensions()[2] << std::endl;
 
-    // my sample nii changed original dicom oreitation, so have to transform it here
-    // transform nii from zyx to xyz
+    // my sample nii changed original dicom oreitation (simpleITK), so have to transform it here
+    // transform nii from zxy to xyz
     vtkNew<vtkImagePermute> permute;
     permute->SetInputData(nii_img_data);
-    permute->SetFilteredAxes(2, 1, 0);
+    permute->SetFilteredAxes(1, 2, 0);
     permute->Update();
     auto mask_img = permute->GetOutput();
+    std::cout << mask_img->GetDimensions()[0] << ", " << mask_img->GetDimensions()[1] << ", "
+              << mask_img->GetDimensions()[2] << std::endl;
 
     vtkNew<vtkImageCast> mask_cast;
     mask_cast->SetInputData(mask_img); // nii_img_data
@@ -135,7 +137,7 @@ int main(int argc, char* argv[])
     std::cout << mask->GetOutput()->GetScalarTypeAsString() << std::endl; // short
 
     vtkNew<vtkImageCast> img_cast;
-    img_cast->SetInputData(nii_reader->GetOutput());
+    img_cast->SetInputData(mask_img);
     img_cast->SetOutputScalarTypeToShort();
     img_cast->Update();
 
@@ -172,7 +174,7 @@ int main(int argc, char* argv[])
     vtkNew<vtkImageViewer2> viewer;
     viewer->SetInputConnection(blender->GetOutputPort());
     viewer->GetWindowLevel()->SetWindow(500);
-    viewer->SetSliceOrientationToYZ();
+    viewer->SetSliceOrientationToXY();
 
     vtkNew<vtkRenderWindowInteractor> interactor;
     vtkNew<myInteractorStyler> style;
