@@ -21,6 +21,8 @@
 
 #define IS_RESLICE
 
+//#define REQUIRE_TRANSFORM_AXIS
+
 class myInteractorStyler final: public vtkInteractorStyleImage
 {
 public:
@@ -112,6 +114,7 @@ int main(int argc, char* argv[])
     std::cout << nii_img_data->GetDimensions()[0] << ", " << nii_img_data->GetDimensions()[1] << ", "
               << nii_img_data->GetDimensions()[2] << std::endl;
 
+#ifdef REQUIRE_TRANSFORM_AXIS
     // my sample nii changed original dicom oreitation (simpleITK), so have to transform it here
     // transform nii from zxy to xyz
     vtkNew<vtkImagePermute> permute;
@@ -121,6 +124,9 @@ int main(int argc, char* argv[])
     auto mask_img = permute->GetOutput();
     std::cout << mask_img->GetDimensions()[0] << ", " << mask_img->GetDimensions()[1] << ", "
               << mask_img->GetDimensions()[2] << std::endl;
+#else
+    auto mask_img = nii_img_data;
+#endif
 
     vtkNew<vtkImageCast> mask_cast;
     mask_cast->SetInputData(mask_img); // nii_img_data

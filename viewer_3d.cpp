@@ -1,5 +1,11 @@
 #include <vtkNew.h>
 #include <vtkOBJReader.h>
+#include <vtkPLYReader.h>
+#include <vtkXMLPolyDataReader.h>
+#include <vtkSTLReader.h>
+#include <vtkPolyDataReader.h>
+#include <vtkBYUReader.h>
+#include <vtkSimplePointsReader.h>
 #include <vtkPolyDataMapper.h>
 #include <vtkNamedColors.h>
 #include <vtkActor.h>
@@ -17,11 +23,102 @@
 #include <vtkSphereSource.h>
 #include <vtkGlyph3D.h>
 #include <vtkRendererCollection.h>
+#include <vtkOrientationMarkerWidget.h>
+#include <vtkAxesActor.h>
 
 #include <iostream>
 #include <sstream>
 #include <fstream>
 #include <string>
+
+//#define WITH_PATH
+
+vtkSmartPointer<vtkPolyData> ReadPolyData(const char* fileName)
+{
+    vtkSmartPointer<vtkPolyData> polyData;
+    std::string extension = vtksys::SystemTools::GetFilenameLastExtension(std::string(fileName));
+
+    // Drop the case of the extension
+    std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+
+    if (extension == ".ply")
+    {
+        vtkNew<vtkPLYReader> reader;
+        reader->SetFileName(fileName);
+        reader->Update();
+        polyData = reader->GetOutput();
+    }
+    else if (extension == ".vtp")
+    {
+        vtkNew<vtkXMLPolyDataReader> reader;
+        reader->SetFileName(fileName);
+        reader->Update();
+        polyData = reader->GetOutput();
+    }
+    else if (extension == ".obj")
+    {
+        vtkNew<vtkOBJReader> reader;
+        reader->SetFileName(fileName);
+        reader->Update();
+        polyData = reader->GetOutput();
+    }
+    else if (extension == ".stl")
+    {
+        vtkNew<vtkSTLReader> reader;
+        reader->SetFileName(fileName);
+        reader->Update();
+        polyData = reader->GetOutput();
+    }
+    else if (extension == ".vtk")
+    {
+        vtkNew<vtkPolyDataReader> reader;
+        reader->SetFileName(fileName);
+        reader->Update();
+        polyData = reader->GetOutput();
+    }
+    else if (extension == ".g")
+    {
+        vtkNew<vtkBYUReader> reader;
+        reader->SetGeometryFileName(fileName);
+        reader->Update();
+        polyData = reader->GetOutput();
+    }
+    else if (extension == ".xyz")
+    {
+        vtkNew<vtkSimplePointsReader> reader;
+        reader->SetFileName(fileName);
+        reader->Update();
+        polyData = reader->GetOutput();
+    }
+    else
+    {
+        std::cerr << "Unsupported 3D Format, use default Sphere Source" << std::endl;
+        vtkNew<vtkSphereSource> source;
+        source->Update();
+        polyData = source->GetOutput();
+    }
+    return polyData;
+}
+
+vtkSmartPointer<vtkOrientationMarkerWidget> SetUpAxesWidget(vtkRenderWindowInteractor* interactor)
+{
+    vtkNew<vtkNamedColors> colors;
+    // axes
+    vtkNew<vtkAxesActor> axes;
+    axes->SetCylinderRadius(0.03);
+    axes->SetShaftTypeToCylinder();
+    axes->SetTotalLength(1.5, 1.5, 1.5);
+
+    // widget
+    vtkNew<vtkOrientationMarkerWidget> widget;
+    double rgba[4]{0.0, 0.0, 0.0, 0.0};
+    colors->GetColor("Carrot", rgba);
+    widget->SetOutlineColor(rgba[0], rgba[1], rgba[2]);
+    widget->SetOrientationMarker(axes);
+    widget->SetInteractor(interactor);
+    widget->SetViewport(0.0, 0.0, 0.4, 0.4);
+    return widget;
+}
 
 class myCameraMotionInteractorStyle: public vtkInteractorStyleTrackballCamera
 {
@@ -71,16 +168,23 @@ vtkStandardNewMacro(myCameraMotionInteractorStyle);
 
 int main(int argc, char* argv[])
 {
+#ifdef WITH_PATH
     if (argc != 3)
     {
         std::cerr << "1) obj file path; 2) path points file" << std::endl;
         return 1;
     }
+#else
+    if (argc != 2)
+    {
+        std::cerr << "1) obj file path" << std::endl;
+        return 1;
+    }
+#endif
 
-    vtkNew<vtkOBJReader> m_reader;
-    m_reader->SetFileName(argv[1]);
-    m_reader->Update();
+    auto model_data = ReadPolyData(argv[1]);
 
+#ifdef WITH_PATH
     vtkNew<vtkPoints> m_path_points;
     std::ifstream fs(argv[2]);
     std::string line;
@@ -93,13 +197,14 @@ int main(int argc, char* argv[])
         m_path_points->InsertNextPoint(x, y, z);
     }
     fs.close();
+#endif
 
     vtkNew<vtkNamedColors> colors;
     auto backgound_color = colors->GetColor3d("Black");
 
     // model
     vtkNew<vtkPolyDataMapper> mapper;
-    mapper->SetInputConnection(m_reader->GetOutputPort());
+    mapper->SetInputData(model_data);
     vtkNew<vtkActor> m_obj_actor;
     m_obj_actor->SetMapper(mapper);
     m_obj_actor->GetProperty()->SetAmbientColor(0.97, 0.5, 0.5);
@@ -109,6 +214,7 @@ int main(int argc, char* argv[])
     m_obj_actor->GetProperty()->SetSpecular(0.1);
     m_obj_actor->GetProperty()->SetOpacity(1.0);
 
+#ifdef WITH_PATH
     // path
     vtkNew<vtkPolyData> path_data;
     path_data->SetPoints(m_path_points);
@@ -146,6 +252,7 @@ int main(int argc, char* argv[])
     vtkNew<vtkActor> endpoints_actor;
     endpoints_actor->GetProperty()->SetColor(colors->GetColor3d("Red").GetData());
     endpoints_actor->SetMapper(endpoints_mapper);
+#endif
 
     // fps
     vtkNew<vtkCornerAnnotation> corner_overlay;
@@ -168,8 +275,10 @@ int main(int argc, char* argv[])
 
     vtkNew<vtkRenderer> m_renderer;
     m_renderer->AddActor(m_obj_actor);
+#ifdef WITH_PATH
     m_renderer->AddActor(path_actor);
     m_renderer->AddActor(endpoints_actor);
+#endif
     m_renderer->AddViewProp(corner_overlay);
     m_renderer->AddObserver(vtkCommand::EndEvent, fps_callback);
     m_renderer->SetBackground(backgound_color.GetData());
@@ -180,7 +289,11 @@ int main(int argc, char* argv[])
     m_renderer->ResetCameraClippingRange();
 
     vtkNew<vtkRenderWindowInteractor> interactor;
+#ifdef WITH_PATH
     vtkNew<myCameraMotionInteractorStyle> style;
+#else
+    vtkNew<vtkInteractorStyleTrackballCamera> style;
+#endif
     interactor->SetInteractorStyle(style);
 
     vtkNew<vtkRenderWindow> m_render_window;
@@ -188,8 +301,14 @@ int main(int argc, char* argv[])
     m_render_window->AddRenderer(m_renderer);
     m_render_window->SetInteractor(interactor);
 
+    auto axis_widget = SetUpAxesWidget(interactor);
+    axis_widget->SetEnabled(1);
+    axis_widget->InteractiveOn();
+
     interactor->Initialize();
+#ifdef WITH_PATH
     style->setPathPoints(path_data);
+#endif
 
     m_render_window->Render();
     interactor->Start();
