@@ -114,36 +114,12 @@ protected:
     void OnMouseWheelForward() override
     {
         if (m_current_camera_pos_index < m_path_data->GetNumberOfPoints() - 1)
-        {
             moveCameraToNthPos(++m_current_camera_pos_index);
-
-            auto* tgt_pos = m_path_data->GetPoint(m_current_camera_pos_index + 1);
-            auto slice_no = point_to_slice(tgt_pos);
-
-            for (auto i = 0; i < 3; i++)
-            {
-                draw_cross_line(slice_no, i);
-                m_image_viewers[i]->SetSlice(slice_no[i]);
-                m_image_viewers[i]->Render();
-            }
-        }
     }
     void OnMouseWheelBackward() override
     {
         if (m_current_camera_pos_index > 1)
-        {
             moveCameraToNthPos(--m_current_camera_pos_index);
-
-            auto* tgt_pos = m_path_data->GetPoint(m_current_camera_pos_index + 1);
-            auto slice_no = point_to_slice(tgt_pos);
-
-            for (auto i = 0; i < 3; i++)
-            {
-                draw_cross_line(slice_no, i);
-                m_image_viewers[i]->SetSlice(slice_no[i]);
-                m_image_viewers[i]->Render();
-            }
-        }
     }
 
 private:
@@ -152,6 +128,16 @@ private:
         auto* camera = m_renderer->GetActiveCamera();
         camera->SetPosition(m_path_data->GetPoint(n - 1));
         camera->SetFocalPoint(m_path_data->GetPoint(n + 1));
+
+        auto* tgt_pos = m_path_data->GetPoint(n);
+        auto slice_no = point_to_slice(tgt_pos);
+        for (auto i = 0; i < 3; i++)
+        {
+            draw_cross_line(slice_no, i);
+            m_image_viewers[i]->SetSlice(slice_no[i]);
+            m_image_viewers[i]->Render();
+        }
+
         Interactor->Render();
     }
 
