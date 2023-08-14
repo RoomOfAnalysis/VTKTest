@@ -23,15 +23,15 @@
 #include <vtkSphereSource.h>
 #include <vtkGlyph3D.h>
 #include <vtkRendererCollection.h>
-#include <vtkOrientationMarkerWidget.h>
-#include <vtkAxesActor.h>
+#include <vtkCameraOrientationWidget.h>
+#include <vtkCameraOrientationRepresentation.h>
 
 #include <iostream>
 #include <sstream>
 #include <fstream>
 #include <string>
 
-//#define WITH_PATH
+#define WITH_PATH
 
 vtkSmartPointer<vtkPolyData> ReadPolyData(const char* fileName)
 {
@@ -98,26 +98,6 @@ vtkSmartPointer<vtkPolyData> ReadPolyData(const char* fileName)
         polyData = source->GetOutput();
     }
     return polyData;
-}
-
-vtkSmartPointer<vtkOrientationMarkerWidget> SetUpAxesWidget(vtkRenderWindowInteractor* interactor)
-{
-    vtkNew<vtkNamedColors> colors;
-    // axes
-    vtkNew<vtkAxesActor> axes;
-    axes->SetCylinderRadius(0.03);
-    axes->SetShaftTypeToCylinder();
-    axes->SetTotalLength(1.5, 1.5, 1.5);
-
-    // widget
-    vtkNew<vtkOrientationMarkerWidget> widget;
-    double rgba[4]{0.0, 0.0, 0.0, 0.0};
-    colors->GetColor("Carrot", rgba);
-    widget->SetOutlineColor(rgba[0], rgba[1], rgba[2]);
-    widget->SetOrientationMarker(axes);
-    widget->SetInteractor(interactor);
-    widget->SetViewport(0.0, 0.0, 0.4, 0.4);
-    return widget;
 }
 
 class myCameraMotionInteractorStyle: public vtkInteractorStyleTrackballCamera
@@ -301,9 +281,10 @@ int main(int argc, char* argv[])
     m_render_window->AddRenderer(m_renderer);
     m_render_window->SetInteractor(interactor);
 
-    auto axis_widget = SetUpAxesWidget(interactor);
-    axis_widget->SetEnabled(1);
-    axis_widget->InteractiveOn();
+    vtkNew<vtkCameraOrientationWidget> cam_orient_manipulator;
+    cam_orient_manipulator->SetParentRenderer(m_renderer);
+    vtkCameraOrientationRepresentation::SafeDownCast(cam_orient_manipulator->GetRepresentation())->AnchorToLowerLeft();
+    cam_orient_manipulator->On();
 
     interactor->Initialize();
 #ifdef WITH_PATH
@@ -311,6 +292,7 @@ int main(int argc, char* argv[])
 #endif
 
     m_render_window->Render();
+    cam_orient_manipulator->SquareResize();  // need call here to change the rep anchor position
     interactor->Start();
 
     return 0;
