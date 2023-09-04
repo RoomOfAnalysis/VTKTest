@@ -26,6 +26,11 @@
 #include <vtkVolumeProperty.h>
 #include <vtkVolume.h>
 #include <vtkPlaneSource.h>
+#include <vtkPolyData.h>
+#include <vtkPoints.h>
+#include <vtkPolyLine.h>
+#include <vtkCellArray.h>
+#include <vtkSphereSource.h>
 
 #include <filesystem>
 #include <iostream>
@@ -67,11 +72,175 @@ public:
     void Execute(vtkObject* caller, unsigned long, void*) override
     {
         auto* picker = reinterpret_cast<vtkCellPicker*>(caller);
-        auto* pos = picker->GetPickPosition();  // global coordinate
-        std::cout << pos[0] << ", " << pos[1] << ", " << pos[2] << '\n';
+        if (auto* actor = picker->GetActor(); actor != nullptr)  // actor is valid when picking on plane
+        {
+            auto* pos = picker->GetPickPosition(); // global coordinate
+            std::cout << pos[0] << ", " << pos[1] << ", " << pos[2] << '\n';
+        }
     }
 };
 vtkStandardNewMacro(myPickerCallback);
+
+// https://examples.vtk.org/site/Cxx/PolyData/DeletePoint/
+void ReallyDeletePoint(vtkSmartPointer<vtkPoints> points, vtkIdType id)
+{
+    vtkNew<vtkPoints> newPoints;
+
+    for (vtkIdType i = 0; i < points->GetNumberOfPoints(); i++)
+    {
+        if (i != id)
+        {
+            double p[3];
+            points->GetPoint(i, p);
+            newPoints->InsertNextPoint(p);
+        }
+    }
+
+    points->ShallowCopy(newPoints);
+}
+
+class myInteractorStyle : public vtkInteractorStyleTrackballCamera
+{
+public:
+    static myInteractorStyle* New();
+    vtkTypeMacro(myInteractorStyle, vtkInteractorStyleTrackballCamera);
+
+    myInteractorStyle() = default;
+    ~myInteractorStyle() = default;
+
+    void set_plane_widget_and_renderer(vtkImagePlaneWidget* plane_widget, vtkRenderer* renderer)
+    {
+        m_plane_widget = plane_widget;
+
+        // use customized picker
+        if (!m_picker) m_picker = vtkSmartPointer<vtkCellPicker>::New();
+        m_picker->SetTolerance(0.005);
+        //vtkNew<myPickerCallback> picker_callback;
+        //m_picker->AddObserver(vtkCommand::EndPickEvent, picker_callback);
+        m_plane_widget->SetPicker(m_picker);
+
+        m_points = vtkSmartPointer<vtkPoints>::New();
+        m_data = vtkSmartPointer<vtkPolyData>::New();
+        m_line_actor = vtkSmartPointer<vtkActor>::New();
+        m_endpoint_actor = vtkSmartPointer<vtkActor>::New();
+
+        m_line_actor->GetProperty()->SetColor(0, 1, 0);
+        m_line_actor->GetProperty()->SetLineWidth(3);
+
+        vtkNew<vtkSphereSource> sphere;
+        sphere->SetCenter(0.0, 0.0, 0.0);
+        sphere->SetRadius(5.0);
+        sphere->SetPhiResolution(100);
+        sphere->SetThetaResolution(100);
+
+        vtkNew<vtkPolyDataMapper> mapper;
+        mapper->SetInputConnection(sphere->GetOutputPort());
+        m_endpoint_actor->SetMapper(mapper);
+        m_endpoint_actor->GetProperty()->SetColor(1, 0, 0);
+        m_endpoint_actor->SetVisibility(false);
+
+        renderer->AddActor(m_line_actor);
+        renderer->AddActor(m_endpoint_actor);
+    }
+
+    void set_original_orientation_and_pos(char ori = 'x', int slice_no = 0)
+    {
+        m_original_plane_orientation = ori;
+        m_original_plane_pos = slice_no;
+    }
+
+    void set_volume(vtkVolume* volume) { m_volume = volume; }
+
+    void OnChar() override
+    {
+        if (m_picker == nullptr) return;
+
+        // pick point
+        if (Interactor->GetKeyCode() == 'p')
+        {
+            if (auto* actor = m_picker->GetActor();
+                actor != nullptr) // plane texture actor is valid when picking on plane
+            {
+                double pos[3]{};
+                m_picker->GetPickPosition(pos); // global coordinate
+                if (std::memcmp(pos, m_pos, sizeof(m_pos)) == 0) return;
+                memcpy(m_pos, pos, sizeof(m_pos));
+                std::cout << pos[0] << ", " << pos[1] << ", " << pos[2] << '\n';
+                // draw line
+                auto n = m_points->GetNumberOfPoints();
+                m_points->InsertNextPoint(m_pos);
+            }
+        }
+        else if (Interactor->GetKeyCode() == 'c')  // clear picked points
+        {
+            m_points = vtkSmartPointer<vtkPoints>::New();
+        }
+        else if (Interactor->GetKeyCode() == 'r')  // reset slice plane orientation and pos
+        {
+            switch (m_original_plane_orientation)
+            {
+            case 'x':
+                m_plane_widget->SetPlaneOrientationToXAxes();
+                break;
+            case 'y':
+                m_plane_widget->SetPlaneOrientationToYAxes();
+                break;
+            case 'z':
+                m_plane_widget->SetPlaneOrientationToZAxes();
+                break;
+            default:
+                m_plane_widget->SetPlaneOrientationToXAxes();
+                break;
+            }
+            m_plane_widget->SetSliceIndex(m_original_plane_pos);
+        }
+        else if (Interactor->GetKeyCode() == 'v')  // show/hide volume
+        {
+            m_volume->SetVisibility(m_volume->GetVisibility() == 0 ? 1 : 0);
+        }
+
+        // draw endpoint
+        if (m_points->GetNumberOfPoints() > 0)
+        {
+            m_endpoint_actor->SetPosition(m_points->GetPoint(m_points->GetNumberOfPoints() - 1));
+            m_endpoint_actor->SetVisibility(true);
+        }
+        else
+            m_endpoint_actor->SetVisibility(false);
+
+        vtkNew<vtkPolyLine> lines;
+        lines->GetPointIds()->SetNumberOfIds(m_points->GetNumberOfPoints());
+        for (auto i = 0; i < m_points->GetNumberOfPoints(); i++) lines->GetPointIds()->SetId(i, i);
+        vtkNew<vtkCellArray> cells;
+        cells->InsertNextCell(lines);
+
+        m_data->SetPoints(m_points);
+        m_data->SetLines(cells);
+
+        // TODO: better way than create new mapper every time
+        vtkNew<vtkPolyDataMapper> mapper;
+        mapper->SetInputData(m_data);
+        m_line_actor->SetMapper(mapper);
+
+        // TODO: project lines on slice plane?
+    }
+
+private:
+    vtkImagePlaneWidget* m_plane_widget = nullptr;
+    vtkSmartPointer<vtkCellPicker> m_picker{};
+    vtkSmartPointer<vtkPolyData> m_data{};
+    vtkSmartPointer<vtkPoints> m_points{};
+    vtkSmartPointer<vtkActor> m_line_actor{};
+    vtkSmartPointer<vtkActor> m_endpoint_actor{};
+
+    double m_pos[3]{};
+
+    char m_original_plane_orientation = 'x';
+    int m_original_plane_pos = 0;
+
+    vtkVolume* m_volume = nullptr;
+};
+vtkStandardNewMacro(myInteractorStyle);
 
 int main(int argc, char* argv[])
 {
@@ -97,15 +266,17 @@ int main(int argc, char* argv[])
     std::cout << dicom_reader->GetOutput()->GetDimensions()[0] << ", " << dicom_reader->GetOutput()->GetDimensions()[1]
               << ", " << dicom_reader->GetOutput()->GetDimensions()[2] << std::endl;
 
+    auto x_dim = dicom_reader->GetOutput()->GetDimensions()[0];
+
     vtkNew<vtkGPUVolumeRayCastMapper> volume_mapper;
     volume_mapper->SetInputConnection(dicom_reader->GetOutputPort());
     //volume_mapper->SetBlendModeToMaximumIntensity();
     
     vtkNew<vtkPiecewiseFunction> opacity;
-    opacity->AddSegment(0, 0, 511, 1);
+    opacity->AddSegment(0, 0, x_dim - 1, 1);
 
     vtkNew<vtkColorTransferFunction> color;
-    color->AddRGBSegment(0, 0.5, 0.1, 0.1, 511, 1, 1, 1);
+    color->AddRGBSegment(0, 0.5, 0.1, 0.1, x_dim - 1, 1, 1, 1);
 
     vtkNew<vtkVolumeProperty> volume_property;
     volume_property->SetScalarOpacity(opacity);
@@ -134,8 +305,10 @@ int main(int argc, char* argv[])
 
     vtkNew<vtkRenderWindowInteractor> interactor;
     interactor->SetRenderWindow(render_window);
-    vtkNew<vtkInteractorStyleTrackballCamera> style;
+    vtkNew<myInteractorStyle> style; //vtkNew<vtkInteractorStyleTrackballCamera> style;
     interactor->SetInteractorStyle(style);
+
+    style->set_volume(volume);
 
     vtkNew<vtkCameraOrientationWidget> cam_orient_manipulator;
     cam_orient_manipulator->SetParentRenderer(renderer);
@@ -153,14 +326,7 @@ int main(int argc, char* argv[])
     vtkNew<vtkImagePlaneWidget> plane_widget;
     plane_widget->SetInteractor(interactor);
 
-    // TODO: how to draw line with picked point on slice?
-    // seems override OnLeftButtonUp better than picker callback?
-    //// use customized picker
-    //vtkNew<vtkCellPicker> picker;
-    //picker->SetTolerance(0.005);
-    //vtkNew<myPickerCallback> picker_callback;
-    //picker->AddObserver(vtkCommand::EndPickEvent, picker_callback);
-    //plane_widget->SetPicker(picker);
+    style->set_plane_widget_and_renderer(plane_widget, renderer);
 
     plane_widget->RestrictPlaneToVolumeOn();
     plane_widget->DisplayTextOn();
@@ -178,7 +344,8 @@ int main(int argc, char* argv[])
     //plane_widget->SetLeftButtonAutoModifier(vtkImagePlaneWidget::VTK_CONTROL_MODIFIER);
 
     plane_widget->SetPlaneOrientationToXAxes();
-    plane_widget->SetSliceIndex(255);
+    plane_widget->SetSliceIndex(x_dim / 2);
+    style->set_original_orientation_and_pos('x', x_dim / 2);
 
     //vtkNew<vtkTransform> transform;
     //// translate plane center
