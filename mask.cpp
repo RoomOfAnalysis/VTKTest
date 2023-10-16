@@ -23,6 +23,8 @@
 
 //#define REQUIRE_TRANSFORM_AXIS
 
+//#define WITH_BLEND
+
 class myInteractorStyler final: public vtkInteractorStyleImage
 {
 public:
@@ -96,9 +98,10 @@ int main(int argc, char* argv[])
     dicom_reader->SetFileNames(sorter->GetFileNamesForSeries(0));
     dicom_reader->SetDataByteOrderToLittleEndian();
     dicom_reader->Update(0);
-    std::cout << dicom_reader->GetOutput()->GetScalarTypeAsString() << std::endl; // short
-    std::cout << dicom_reader->GetOutput()->GetDimensions()[0] << ", " << dicom_reader->GetOutput()->GetDimensions()[1]
-              << ", " << dicom_reader->GetOutput()->GetDimensions()[2] << std::endl;
+    auto dicom_img_data = dicom_reader->GetOutput();
+    std::cout << dicom_img_data->GetScalarTypeAsString() << std::endl; // short
+    std::cout << dicom_img_data->GetDimensions()[0] << ", " << dicom_img_data->GetDimensions()[1] << ", "
+              << dicom_img_data->GetDimensions()[2] << std::endl;
 
     std::filesystem::path nii_file_path{argv[2]};
     vtkNew<vtkNIFTIImageReader> nii_reader;
@@ -136,27 +139,36 @@ int main(int argc, char* argv[])
     std::cout << mask_img_data->GetScalarTypeAsString() << std::endl; // unsigned char
 
     vtkNew<vtkImageMask> mask;
-    mask->SetImageInputData(dicom_reader->GetOutput());
+    mask->SetImageInputData(dicom_img_data);
     mask->SetMaskInputData(mask_img_data);
     mask->SetNotMask(true);
+    mask->SetMaskedOutputValue(-1e5);
     mask->Update();
     std::cout << mask->GetOutput()->GetScalarTypeAsString() << std::endl; // short
 
+#ifdef WITH_BLEND
     vtkNew<vtkImageCast> img_cast;
     img_cast->SetInputData(mask_img);
     img_cast->SetOutputScalarTypeToShort();
     img_cast->Update();
+#endif
+
+    constexpr int window = 1000;
+    constexpr int level = 500;
 
 #ifdef IS_RESLICE
     vtkNew<vtkLookupTable> table;
     table->Build();
     table->SetRange(0, 255);
+    table->SetNanColor(1, 0, 0, 1);
 
+#ifdef WITH_BLEND
     vtkNew<vtkImageResliceToColors> nii_reslice;
     nii_reslice->SetOutputFormatToRGB();
     nii_reslice->SetLookupTable(table);
     nii_reslice->SetInputData(img_cast->GetOutput());
     nii_reslice->Update();
+#endif
 
     vtkNew<vtkImageResliceToColors> masked_reslice;
     masked_reslice->SetOutputFormatToRGB();
@@ -165,6 +177,7 @@ int main(int argc, char* argv[])
     masked_reslice->Update();
 #endif // IS_RESLICE
 
+#ifdef WITH_BLEND
     vtkNew<vtkImageBlend> blender;
 #ifdef IS_RESLICE
     blender->AddInputConnection(masked_reslice->GetOutputPort());
@@ -176,10 +189,16 @@ int main(int argc, char* argv[])
 
     blender->SetOpacity(0, 0.5);
     blender->SetOpacity(1, 0.5);
+#endif
 
     vtkNew<vtkImageViewer2> viewer;
+#ifdef WITH_BLEND
     viewer->SetInputConnection(blender->GetOutputPort());
-    viewer->GetWindowLevel()->SetWindow(500);
+#else
+    viewer->SetInputConnection(masked_reslice->GetOutputPort());
+#endif
+    viewer->GetWindowLevel()->SetWindow(window);
+    viewer->GetWindowLevel()->SetLevel(level);
     viewer->SetSliceOrientationToXY();
 
     vtkNew<vtkRenderWindowInteractor> interactor;
