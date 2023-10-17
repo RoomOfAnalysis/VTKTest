@@ -23,7 +23,7 @@
 
 //#define REQUIRE_TRANSFORM_AXIS
 
-//#define WITH_BLEND
+#define WITH_BLEND
 
 class myInteractorStyler final: public vtkInteractorStyleImage
 {
@@ -138,6 +138,7 @@ int main(int argc, char* argv[])
     auto mask_img_data = mask_cast->GetOutput();
     std::cout << mask_img_data->GetScalarTypeAsString() << std::endl; // unsigned char
 
+#ifndef WITH_BLEND
     vtkNew<vtkImageMask> mask;
     mask->SetImageInputData(dicom_img_data);
     mask->SetMaskInputData(mask_img_data);
@@ -145,6 +146,7 @@ int main(int argc, char* argv[])
     mask->SetMaskedOutputValue(-1e5);
     mask->Update();
     std::cout << mask->GetOutput()->GetScalarTypeAsString() << std::endl; // short
+#endif
 
 #ifdef WITH_BLEND
     vtkNew<vtkImageCast> img_cast;
@@ -157,48 +159,60 @@ int main(int argc, char* argv[])
     constexpr int level = 500;
 
 #ifdef IS_RESLICE
-    vtkNew<vtkLookupTable> table;
-    table->Build();
-    table->SetRange(0, 255);
-    table->SetNanColor(1, 0, 0, 1);
+    //vtkNew<vtkLookupTable> dicom_table;
+    //dicom_table->SetRange(dicom_img_data->GetScalarRange());
+    //dicom_table->Build();
+
+    vtkNew<vtkImageResliceToColors> dicom_reslice;
+    dicom_reslice->SetOutputFormatToRGB();
+    //dicom_reslice->SetLookupTable(dicom_table);
 
 #ifdef WITH_BLEND
+    dicom_reslice->SetInputData(dicom_img_data);
+#else
+    dicom_reslice->SetInputData(mask->GetOutput());
+#endif
+    dicom_reslice->Update();
+
+#ifdef WITH_BLEND
+    vtkNew<vtkLookupTable> nii_table;
+    nii_table->SetNumberOfColors(2);
+    nii_table->SetTableRange(img_cast->GetOutput()->GetScalarRange());
+    nii_table->SetTableValue(0, 0, 0, 0, 0);
+    nii_table->SetTableValue(1, 1, 0, 0, 1);
+    nii_table->Build();
+
     vtkNew<vtkImageResliceToColors> nii_reslice;
-    nii_reslice->SetOutputFormatToRGB();
-    nii_reslice->SetLookupTable(table);
+    nii_reslice->SetOutputFormatToRGBA();
+    nii_reslice->SetLookupTable(nii_table);
     nii_reslice->SetInputData(img_cast->GetOutput());
     nii_reslice->Update();
 #endif
 
-    vtkNew<vtkImageResliceToColors> masked_reslice;
-    masked_reslice->SetOutputFormatToRGB();
-    masked_reslice->SetLookupTable(table);
-    masked_reslice->SetInputData(mask->GetOutput());
-    masked_reslice->Update();
 #endif // IS_RESLICE
 
 #ifdef WITH_BLEND
     vtkNew<vtkImageBlend> blender;
 #ifdef IS_RESLICE
-    blender->AddInputConnection(masked_reslice->GetOutputPort());
+    blender->AddInputConnection(dicom_reslice->GetOutputPort());
     blender->AddInputConnection(nii_reslice->GetOutputPort());
 #else
     blender->AddInputConnection(mask->GetOutputPort());
     blender->AddInputConnection(img_cast->GetOutputPort());
 #endif // IS_RESLICE
 
-    blender->SetOpacity(0, 0.5);
-    blender->SetOpacity(1, 0.5);
+    blender->SetOpacity(1, 1);
 #endif
 
     vtkNew<vtkImageViewer2> viewer;
 #ifdef WITH_BLEND
     viewer->SetInputConnection(blender->GetOutputPort());
 #else
-    viewer->SetInputConnection(masked_reslice->GetOutputPort());
+    viewer->SetInputConnection(dicom_reslice->GetOutputPort());
 #endif
-    viewer->GetWindowLevel()->SetWindow(window);
-    viewer->GetWindowLevel()->SetLevel(level);
+    // TODO: window/level will affect the displaying color of slices
+    //viewer->GetWindowLevel()->SetWindow(window);
+    //viewer->GetWindowLevel()->SetLevel(level);
     viewer->SetSliceOrientationToXY();
 
     vtkNew<vtkRenderWindowInteractor> interactor;
