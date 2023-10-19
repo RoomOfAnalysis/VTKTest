@@ -34,8 +34,13 @@
 #include <vtkTextProperty.h>
 #include <vtkProperty2D.h>
 
+#include <vtkCornerAnnotation.h>
+
 #include <filesystem>
 #include <iostream>
+#include <sstream>
+
+//#define USE_SLIDER
 
 class MImageViewer2: public vtkImageViewer2
 {
@@ -65,6 +70,7 @@ public:
     }
 };
 
+#ifdef USE_SLIDER
 class MSliderCallback: public vtkCommand
 {
 public:
@@ -83,6 +89,63 @@ public:
     vtkSmartPointer<MImageViewer2> viewer = nullptr;
     vtkSmartPointer<MImageViewer2> viewer1 = nullptr;
 };
+#else
+class myInteractorStyler final: public vtkInteractorStyleImage
+{
+public:
+    static myInteractorStyler* New();
+
+    vtkTypeMacro(myInteractorStyler, vtkInteractorStyleImage);
+
+    void setImageViewers(vtkImageViewer2* viewer1, vtkImageViewer2* viewer2)
+    {
+        m_viewer1 = viewer1;
+        m_viewer2 = viewer2;
+        m_slice_min = viewer1->GetSliceMin();
+        m_slice_max = viewer1->GetSliceMax();
+        m_slice = (m_slice_min + m_slice_max) / 2;
+    }
+
+protected:
+    void OnMouseWheelForward() override { moveSliceForward(); }
+
+    void OnMouseWheelBackward() override { moveSliceBackward(); }
+
+private:
+    void moveSliceForward()
+    {
+        if (m_slice < m_slice_max)
+        {
+            m_slice += 1;
+
+            m_viewer1->SetSlice(m_slice);
+            m_viewer2->SetSlice(m_slice);
+            m_viewer1->Render();
+        }
+        std::cout << m_slice << '\n';
+    }
+
+    void moveSliceBackward()
+    {
+        if (m_slice > m_slice_min)
+        {
+            m_slice -= 1;
+
+            m_viewer1->SetSlice(m_slice);
+            m_viewer2->SetSlice(m_slice);
+            m_viewer1->Render();
+        }
+        std::cout << m_slice << '\n';
+    }
+
+private:
+    vtkImageViewer2 *m_viewer1, *m_viewer2;
+    int m_slice;
+    int m_slice_min;
+    int m_slice_max;
+};
+vtkStandardNewMacro(myInteractorStyler);
+#endif
 
 vtkSmartPointer<vtkImageData> LoadDicom(const char* path)
 {
@@ -128,8 +191,8 @@ void overlay(vtkSmartPointer<vtkImageData> dicom, vtkSmartPointer<vtkImageData> 
     viewer->SetInputData(dicom);
     viewer->SetSlice(255);
     viewer->SetSliceOrientationToXY();
-    viewer->GetRenderer()->SetBackground(0.5, 0.5, 0.5);
-    viewer->GetRenderWindow()->SetWindowName("ImageViewer2D");
+    viewer->GetRenderWindow()->SetWindowName("overlay");
+    viewer->GetRenderWindow()->SetSize(500, 500);
 
     vtkSmartPointer<vtkLookupTable> pColorTable = vtkSmartPointer<vtkLookupTable>::New();
     pColorTable->SetNumberOfColors(2);
@@ -151,10 +214,8 @@ void overlay(vtkSmartPointer<vtkImageData> dicom, vtkSmartPointer<vtkImageData> 
 
     vtkSmartPointer<vtkRenderWindowInteractor> rwi = vtkSmartPointer<vtkRenderWindowInteractor>::New();
     viewer->SetupInteractor(rwi);
-    //vtkSmartPointer<vtkInteractorStyleTrackballCamera> style =
-    //    vtkSmartPointer<vtkInteractorStyleTrackballCamera>::New();
-    ////viewer->GetRenderer()->GetRenderWindow()->GetInteractor()->SetInteractorStyle(style);
 
+#ifdef USE_SLIDER
     vtkSmartPointer<vtkSliderRepresentation2D> sliderRep = vtkSmartPointer<vtkSliderRepresentation2D>::New();
     sliderRep->SetMinimumValue(viewer->GetSliceMin());
     sliderRep->SetMaximumValue(viewer->GetSliceMax());
@@ -180,14 +241,32 @@ void overlay(vtkSmartPointer<vtkImageData> dicom, vtkSmartPointer<vtkImageData> 
     callback->viewer1 = viewerLayer;
 
     sliderWidget->AddObserver(vtkCommand::InteractionEvent, callback);
+#else
+    vtkNew<myInteractorStyler> style;
+    style->setImageViewers(viewer, viewerLayer);
+    rwi->SetInteractorStyle(style);
+#endif
 
-    //vtkSmartPointer<vtkAxesActor> axes = vtkSmartPointer<vtkAxesActor>::New();
-    //double axesSize[3] = {100, 100, 100};
-    //axes->SetTotalLength(axesSize);
-    //axes->SetConeRadius(0.1);
-    //axes->SetShaftTypeToLine();
-    //axes->SetAxisLabels(false);
-    //viewer->GetRenderer()->AddActor(axes);
+    // fps
+    vtkNew<vtkCornerAnnotation> corner_overlay;
+    corner_overlay->GetTextProperty()->SetColor(1.0, 0.72, 0.0);
+    corner_overlay->SetText(vtkCornerAnnotation::UpperRight, "FPS: 0");
+    vtkNew<vtkCallbackCommand> fps_callback;
+    fps_callback->SetCallback(
+        [](vtkObject* caller, long unsigned int vtkNotUsed(eventId), void* clientData, void* vtkNotUsed(callData)) {
+            auto* renderer = static_cast<vtkRenderer*>(caller);
+            auto* corner_overlay = reinterpret_cast<vtkCornerAnnotation*>(clientData);
+            double timeInSeconds = renderer->GetLastRenderTimeInSeconds();
+            double fps = 1.0 / timeInSeconds;
+            std::ostringstream out;
+            out << "FPS: ";
+            out.precision(2);
+            out << fps;
+            corner_overlay->SetText(vtkCornerAnnotation::UpperRight, out.str().c_str());
+        });
+    fps_callback->SetClientData(corner_overlay.Get());
+    viewer->GetRenderer()->AddViewProp(corner_overlay);
+    viewer->GetRenderer()->AddObserver(vtkCommand::EndEvent, fps_callback);
 
     rwi->Start();
 }

@@ -16,8 +16,15 @@
 #include <vtkLookupTable.h>
 #include <vtkImageResliceToColors.h>
 
+#include <vtkCornerAnnotation.h>
+#include <vtkTextProperty.h>
+#include <vtkCallbackCommand.h>
+#include <vtkRenderer.h>
+#include <vtkRenderWindow.h>
+
 #include <filesystem>
 #include <iostream>
+#include <sstream>
 
 class myInteractorStyler final: public vtkInteractorStyleImage
 {
@@ -169,6 +176,29 @@ int main(int argc, char* argv[])
     viewer->SetupInteractor(interactor);
     interactor->SetInteractorStyle(style);
 
+    // fps
+    vtkNew<vtkCornerAnnotation> corner_overlay;
+    corner_overlay->GetTextProperty()->SetColor(1.0, 0.72, 0.0);
+    corner_overlay->SetText(vtkCornerAnnotation::UpperRight, "FPS: 0");
+    vtkNew<vtkCallbackCommand> fps_callback;
+    fps_callback->SetCallback(
+        [](vtkObject* caller, long unsigned int vtkNotUsed(eventId), void* clientData, void* vtkNotUsed(callData)) {
+            auto* renderer = static_cast<vtkRenderer*>(caller);
+            auto* corner_overlay = reinterpret_cast<vtkCornerAnnotation*>(clientData);
+            double timeInSeconds = renderer->GetLastRenderTimeInSeconds();
+            double fps = 1.0 / timeInSeconds;
+            std::ostringstream out;
+            out << "FPS: ";
+            out.precision(2);
+            out << fps;
+            corner_overlay->SetText(vtkCornerAnnotation::UpperRight, out.str().c_str());
+        });
+    fps_callback->SetClientData(corner_overlay.Get());
+    viewer->GetRenderer()->AddViewProp(corner_overlay);
+    viewer->GetRenderer()->AddObserver(vtkCommand::EndEvent, fps_callback);
+
+    viewer->GetRenderWindow()->SetWindowName("blend");
+    viewer->GetRenderWindow()->SetSize(500, 500);
     viewer->Render();
     interactor->Start();
 
