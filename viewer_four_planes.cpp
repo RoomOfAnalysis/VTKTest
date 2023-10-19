@@ -52,7 +52,8 @@ public:
         m_renderer->ResetCameraClippingRange();
     }
 
-    void setImageViewers(vtkImageViewer2* sagittal_viewer, vtkImageViewer2* coronal_viewer, vtkImageViewer2* axial_viewer)
+    void setImageViewers(vtkImageViewer2* sagittal_viewer, vtkImageViewer2* coronal_viewer,
+                         vtkImageViewer2* axial_viewer)
     {
         m_image_viewers[0] = sagittal_viewer;
         m_image_viewers[1] = coronal_viewer;
@@ -118,8 +119,7 @@ protected:
     }
     void OnMouseWheelBackward() override
     {
-        if (m_current_camera_pos_index > 1)
-            moveCameraToNthPos(--m_current_camera_pos_index);
+        if (m_current_camera_pos_index > 1) moveCameraToNthPos(--m_current_camera_pos_index);
     }
 
 private:
@@ -180,7 +180,7 @@ private:
             int x = 0, y = 0;
             switch (i)
             {
-            case 0:  // YZ
+            case 0: // YZ
                 x = point[1];
                 y = point[2];
                 break;

@@ -1,19 +1,10 @@
-﻿#pragma once
+﻿#include <vtkSmartPointer.h>
 
-#include <vtkAutoInit.h>
-VTK_MODULE_INIT(vtkRenderingOpenGL2);
-VTK_MODULE_INIT(vtkRenderingVolumeOpenGL2);
-VTK_MODULE_INIT(vtkInteractionStyle);
-VTK_MODULE_INIT(vtkRenderingFreeType);
-#include <vtkImageData.h>
-#include <vtkProperty.h>
-#include <vtkDataSetMapper.h>
-#include <vtkRendererCollection.h>
-#include <vtkPolyDataMapper.h>
 #include <vtkDicomReader.h>
 #include <vtkDICOMSorter.h>
 #include <vtkStringArray.h>
 #include <vtkNIFTIImageReader.h>
+#include <vtkImageData.h>
 
 #include <vtkAxesActor.h>
 #include <vtkRenderWindowInteractor.h>
@@ -23,57 +14,35 @@ VTK_MODULE_INIT(vtkRenderingFreeType);
 #include <vtkActor.h>
 #include <vtkProperty.h>
 #include <vtkInteractorStyleImage.h>
+#include <vtkInteractorStyleTrackballCamera.h>
 
-#include <vtkSmartPointer.h>
 #include <vtkImageActor.h>
-#include <vtkRenderer.h>
-#include <vtkRenderWindow.h>
-#include <vtkRenderWindowInteractor.h>
 #include <vtkImageViewer2.h>
 #include <vtkImageSliceMapper.h>
-#include <vtkPNGReader.h>
-#include <vtkSTLReader.h>
-#include <vtkTexture.h>
-#include <vtkTextureMapToCylinder.h>
-#include <vtkImageFlip.h>
-#include <vtkImageGradient.h>
-#include <vtkImageGradient.h>
-#include <vtkImageMagnitude.h>
-#include <vtkImageShiftScale.h>
-#include <vtkImageHybridMedian2D.h>
-#include <vtkSphereSource.h>
-#include <vtkTextProperty.h>
-#include <vtkProperty2D.h>
-#include <vtkSmartPointer.h>
-#include <vtkPolyData.h>
-#include <vtkSliderWidget.h>
-#include <vtkPolyDataMapper.h>
-#include <vtkActor.h>
-#include <vtkRenderWindow.h>
-#include <vtkRenderer.h>
-#include <vtkRenderWindowInteractor.h>
-#include <vtkSmartPointer.h>
-#include <vtkCommand.h>
-#include <vtkWidgetEvent.h>
-#include <vtkCallbackCommand.h>
-#include <vtkWidgetEventTranslator.h>
-#include <vtkInteractorStyleTrackballCamera.h>
-#include <vtkSliderWidget.h>
-#include <vtkSliderRepresentation2D.h>
-#include <vtkProperty.h>
 #include <vtkLookupTable.h>
 #include <vtkImageProperty.h>
 #include <vtkImageMapToColors.h>
 
+#include <vtkCommand.h>
+#include <vtkWidgetEvent.h>
+#include <vtkCallbackCommand.h>
+#include <vtkWidgetEventTranslator.h>
+
+#include <vtkSliderWidget.h>
+#include <vtkSliderRepresentation2D.h>
+#include <vtkProperty.h>
+#include <vtkTextProperty.h>
+#include <vtkProperty2D.h>
+
 #include <filesystem>
 #include <iostream>
 
-class vtkImageViewer2My : public vtkImageViewer2
+class MImageViewer2: public vtkImageViewer2
 {
 public:
-    vtkTypeMacro(vtkImageViewer2My, vtkImageViewer2);
+    vtkTypeMacro(MImageViewer2, vtkImageViewer2);
 
-    static vtkImageViewer2My* New() { return new vtkImageViewer2My; }
+    static MImageViewer2* New() { return new MImageViewer2; }
 
     void SetSlice(int slice) override
     {
@@ -96,10 +65,10 @@ public:
     }
 };
 
-class vtkSliderCallback1: public vtkCommand
+class MSliderCallback: public vtkCommand
 {
 public:
-    static vtkSliderCallback1* New() { return new vtkSliderCallback1; }
+    static MSliderCallback* New() { return new MSliderCallback; }
     virtual void Execute(vtkObject* caller, unsigned long, void*)
     {
         vtkSliderWidget* sliderWidget = reinterpret_cast<vtkSliderWidget*>(caller);
@@ -110,9 +79,9 @@ public:
                 static_cast<vtkSliderRepresentation*>(sliderWidget->GetRepresentation())->GetValue());
         this->viewer->Render();
     }
-    vtkSliderCallback1() {}
-    vtkSmartPointer<vtkImageViewer2My> viewer = nullptr;
-    vtkSmartPointer<vtkImageViewer2My> viewer1 = nullptr;
+    MSliderCallback() {}
+    vtkSmartPointer<MImageViewer2> viewer = nullptr;
+    vtkSmartPointer<MImageViewer2> viewer1 = nullptr;
 };
 
 vtkSmartPointer<vtkImageData> LoadDicom(const char* path)
@@ -153,9 +122,9 @@ vtkSmartPointer<vtkImageData> LoadNii(const char* file_path)
     return nii_reader->GetOutput();
 }
 
-void show3dImage(vtkSmartPointer<vtkImageData> dicom, vtkSmartPointer<vtkImageData> nii)
+void overlay(vtkSmartPointer<vtkImageData> dicom, vtkSmartPointer<vtkImageData> nii)
 {
-    vtkSmartPointer<vtkImageViewer2My> viewer = vtkSmartPointer<vtkImageViewer2My>::New();
+    vtkSmartPointer<MImageViewer2> viewer = vtkSmartPointer<MImageViewer2>::New();
     viewer->SetInputData(dicom);
     viewer->SetSlice(255);
     viewer->SetSliceOrientationToXY();
@@ -168,7 +137,7 @@ void show3dImage(vtkSmartPointer<vtkImageData> dicom, vtkSmartPointer<vtkImageDa
     pColorTable->SetTableValue(0, 0.0, 0.0, 1.0, 0.0);
     pColorTable->SetTableValue(1, 1, 0, 0, 1.0);
     pColorTable->Build();
-    vtkSmartPointer<vtkImageViewer2My> viewerLayer = vtkSmartPointer<vtkImageViewer2My>::New();
+    vtkSmartPointer<MImageViewer2> viewerLayer = vtkSmartPointer<MImageViewer2>::New();
     viewerLayer->SetInputData(nii);
     viewerLayer->SetRenderWindow(viewer->GetRenderWindow());
     viewerLayer->SetSliceOrientationToXY();
@@ -206,7 +175,7 @@ void show3dImage(vtkSmartPointer<vtkImageData> dicom, vtkSmartPointer<vtkImageDa
     sliderWidget->SetAnimationModeToAnimate();
     sliderWidget->EnabledOn();
 
-    vtkSmartPointer<vtkSliderCallback1> callback = vtkSmartPointer<vtkSliderCallback1>::New();
+    vtkSmartPointer<MSliderCallback> callback = vtkSmartPointer<MSliderCallback>::New();
     callback->viewer = viewer;
     callback->viewer1 = viewerLayer;
 
@@ -229,7 +198,7 @@ int main(int argc, char* argv[])
     const char* nii_path = argv[2];
     vtkSmartPointer<vtkImageData> dicom = LoadDicom(dicom_path);
     vtkSmartPointer<vtkImageData> nii = LoadNii(nii_path);
-    show3dImage(dicom, nii);
+    overlay(dicom, nii);
 
     return 0;
 }

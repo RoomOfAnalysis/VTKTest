@@ -60,7 +60,7 @@ vtkImagePlaneWidget interaction with mouse:
         stretch or shrink the corner
 */
 
-class myPickerCallback : public vtkCommand
+class myPickerCallback: public vtkCommand
 {
 public:
     static myPickerCallback* New();
@@ -72,7 +72,7 @@ public:
     void Execute(vtkObject* caller, unsigned long, void*) override
     {
         auto* picker = reinterpret_cast<vtkCellPicker*>(caller);
-        if (auto* actor = picker->GetActor(); actor != nullptr)  // actor is valid when picking on plane
+        if (auto* actor = picker->GetActor(); actor != nullptr) // actor is valid when picking on plane
         {
             auto* pos = picker->GetPickPosition(); // global coordinate
             std::cout << pos[0] << ", " << pos[1] << ", " << pos[2] << '\n';
@@ -99,7 +99,7 @@ void ReallyDeletePoint(vtkSmartPointer<vtkPoints> points, vtkIdType id)
     points->ShallowCopy(newPoints);
 }
 
-class myInteractorStyle : public vtkInteractorStyleTrackballCamera
+class myInteractorStyle: public vtkInteractorStyleTrackballCamera
 {
 public:
     static myInteractorStyle* New();
@@ -171,11 +171,11 @@ public:
                 m_points->InsertNextPoint(m_pos);
             }
         }
-        else if (Interactor->GetKeyCode() == 'c')  // clear picked points
+        else if (Interactor->GetKeyCode() == 'c') // clear picked points
         {
             m_points = vtkSmartPointer<vtkPoints>::New();
         }
-        else if (Interactor->GetKeyCode() == 'r')  // reset slice plane orientation and pos
+        else if (Interactor->GetKeyCode() == 'r') // reset slice plane orientation and pos
         {
             switch (m_original_plane_orientation)
             {
@@ -194,7 +194,7 @@ public:
             }
             m_plane_widget->SetSliceIndex(m_original_plane_pos);
         }
-        else if (Interactor->GetKeyCode() == 'v')  // show/hide volume
+        else if (Interactor->GetKeyCode() == 'v') // show/hide volume
         {
             m_volume->SetVisibility(m_volume->GetVisibility() == 0 ? 1 : 0);
         }
@@ -210,7 +210,8 @@ public:
 
         vtkNew<vtkPolyLine> lines;
         lines->GetPointIds()->SetNumberOfIds(m_points->GetNumberOfPoints());
-        for (auto i = 0; i < m_points->GetNumberOfPoints(); i++) lines->GetPointIds()->SetId(i, i);
+        for (auto i = 0; i < m_points->GetNumberOfPoints(); i++)
+            lines->GetPointIds()->SetId(i, i);
         vtkNew<vtkCellArray> cells;
         cells->InsertNextCell(lines);
 
@@ -271,7 +272,7 @@ int main(int argc, char* argv[])
     vtkNew<vtkGPUVolumeRayCastMapper> volume_mapper;
     volume_mapper->SetInputConnection(dicom_reader->GetOutputPort());
     //volume_mapper->SetBlendModeToMaximumIntensity();
-    
+
     vtkNew<vtkPiecewiseFunction> opacity;
     opacity->AddSegment(0, 0, x_dim - 1, 1);
 
@@ -284,7 +285,7 @@ int main(int argc, char* argv[])
     volume_property->SetInterpolationTypeToLinear();
     volume_property->ShadeOn();
     volume_property->SetAmbient(0.4);
-    volume_property->SetDiffuse(0.6); 
+    volume_property->SetDiffuse(0.6);
     volume_property->SetSpecular(0.2);
 
     vtkNew<vtkVolume> volume;

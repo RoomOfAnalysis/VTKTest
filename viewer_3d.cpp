@@ -292,7 +292,7 @@ int main(int argc, char* argv[])
 #endif
 
     m_render_window->Render();
-    cam_orient_manipulator->SquareResize();  // need call here to change the rep anchor position
+    cam_orient_manipulator->SquareResize(); // need call here to change the rep anchor position
     interactor->Start();
 
     return 0;

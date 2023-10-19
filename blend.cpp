@@ -19,10 +19,6 @@
 #include <filesystem>
 #include <iostream>
 
-#define IS_RESLICE
-
-//#define REQUIRE_TRANSFORM_AXIS
-
 class myInteractorStyler final: public vtkInteractorStyleImage
 {
 public:
@@ -115,19 +111,7 @@ int main(int argc, char* argv[])
     std::cout << nii_img_data->GetDimensions()[0] << ", " << nii_img_data->GetDimensions()[1] << ", "
               << nii_img_data->GetDimensions()[2] << std::endl;
 
-#ifdef REQUIRE_TRANSFORM_AXIS
-    // my sample nii changed original dicom oreitation (simpleITK), so have to transform it here
-    // transform nii from zxy to xyz
-    vtkNew<vtkImagePermute> permute;
-    permute->SetInputData(nii_img_data);
-    permute->SetFilteredAxes(1, 2, 0);
-    permute->Update();
-    auto mask_img = permute->GetOutput();
-    std::cout << mask_img->GetDimensions()[0] << ", " << mask_img->GetDimensions()[1] << ", "
-              << mask_img->GetDimensions()[2] << std::endl;
-#else
     auto mask_img = nii_img_data;
-#endif
 
     vtkNew<vtkImageCast> mask_cast;
     mask_cast->SetInputData(mask_img); // nii_img_data
@@ -136,24 +120,47 @@ int main(int argc, char* argv[])
     auto mask_img_data = mask_cast->GetOutput();
     std::cout << mask_img_data->GetScalarTypeAsString() << std::endl; // unsigned char
 
-    vtkNew<vtkImageMask> mask;
-    mask->SetImageInputData(dicom_img_data);
-    mask->SetMaskInputData(mask_img_data);
-    mask->SetNotMask(true);
-    mask->SetMaskedOutputValue(-1e5);
-    mask->Update();
-    std::cout << mask->GetOutput()->GetScalarTypeAsString() << std::endl; // short
+    vtkNew<vtkImageCast> img_cast;
+    img_cast->SetInputData(mask_img);
+    img_cast->SetOutputScalarTypeToShort();
+    img_cast->Update();
 
-#ifdef IS_RESLICE
+    constexpr int window = 1000;
+    constexpr int level = 500;
+
+    //vtkNew<vtkLookupTable> dicom_table;
+    //dicom_table->SetRange(dicom_img_data->GetScalarRange());
+    //dicom_table->Build();
+
     vtkNew<vtkImageResliceToColors> dicom_reslice;
-    dicom_reslice->BypassOn(); // without lookup table
     dicom_reslice->SetOutputFormatToRGB();
-    dicom_reslice->SetInputData(mask->GetOutput());
+    //dicom_reslice->SetLookupTable(dicom_table);
+    dicom_reslice->SetInputData(dicom_img_data);
     dicom_reslice->Update();
-#endif // IS_RESLICE
+
+    vtkNew<vtkLookupTable> nii_table;
+    nii_table->SetNumberOfColors(2);
+    nii_table->SetTableRange(img_cast->GetOutput()->GetScalarRange());
+    nii_table->SetTableValue(0, 0, 0, 0, 0);
+    nii_table->SetTableValue(1, 1, 0, 0, 1);
+    nii_table->Build();
+
+    vtkNew<vtkImageResliceToColors> nii_reslice;
+    nii_reslice->SetOutputFormatToRGBA();
+    nii_reslice->SetLookupTable(nii_table);
+    nii_reslice->SetInputData(img_cast->GetOutput());
+    nii_reslice->Update();
+
+    vtkNew<vtkImageBlend> blender;
+    blender->AddInputConnection(dicom_reslice->GetOutputPort());
+    blender->AddInputConnection(nii_reslice->GetOutputPort());
+    blender->SetOpacity(1, 1);
 
     vtkNew<vtkImageViewer2> viewer;
-    viewer->SetInputConnection(dicom_reslice->GetOutputPort());
+    viewer->SetInputConnection(blender->GetOutputPort());
+    // TODO: window/level will affect the displaying color of slices
+    //viewer->GetWindowLevel()->SetWindow(window);
+    //viewer->GetWindowLevel()->SetLevel(level);
     viewer->SetSliceOrientationToXY();
 
     vtkNew<vtkRenderWindowInteractor> interactor;
