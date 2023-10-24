@@ -15,6 +15,9 @@
 #include <vtkImagePermute.h>
 #include <vtkLookupTable.h>
 #include <vtkImageResliceToColors.h>
+#include <vtkDICOMMetaData.h>
+#include <vtkMarchingCubes.h>
+#include <vtkCenterOfMass.h>
 
 #include <filesystem>
 #include <iostream>
@@ -101,6 +104,56 @@ int main(int argc, char* argv[])
     std::cout << dicom_img_data->GetDimensions()[0] << ", " << dicom_img_data->GetDimensions()[1] << ", "
               << dicom_img_data->GetDimensions()[2] << std::endl;
 
+    //from https://dgobbi.github.io/vtk-dicom/doc/api/imageDisplay.html
+    //MONOCHROME1 - negative image, where higher values are darker (e.g. radiographic film )
+    //MONOCHROME2 - positive image, where higher values are brighter (e.g. CT, MR)
+    //PALETTE COLOR - indexed color with palette
+    //RGB - full-color image with separate RGB components
+    auto* meta = dicom_reader->GetMetaData();
+    auto photometric = meta->Get(DC::PhotometricInterpretation);
+    if (photometric.Matches("MONOCHROME1"))
+    {
+        // display with a lookup table that goes from white to black
+        std::cout << "MONOCHROME1" << std::endl;
+    }
+    else if (photometric.Matches("MONOCHROME2"))
+    {
+        // display with a lookup table that goes from black to white,
+        // or display with a suitable pseudocolor lookup table
+        std::cout << "MONOCHROME2" << std::endl;
+    }
+    else if (photometric.Matches("PALETTE*"))
+    {
+        // display with palette lookup table (see vtkDICOMLookupTable),
+        // or convert to RGB with vtkDICOMApplyPalette
+        std::cout << "PALETTE*" << std::endl;
+    }
+    else if (photometric.Matches("RGB*"))
+    {
+        // display RGB data directly
+        std::cout << "RGB*" << std::endl;
+    }
+    else if (photometric.Matches("YBR*"))
+    {
+        // display RGB data directly
+        std::cout << "YBR*" << std::endl;
+    }
+    //int dims[3];
+    //dicom_img_data->GetDimensions(dims);
+    //int min = INT_MAX, max = INT_MIN;
+    //for (auto i = 0; i < dims[0]; i++)
+    //    for (auto j = 0; j < dims[1]; j++)
+    //        for (auto k = 0; k < dims[2]; k++)
+    //        {
+    //            min = min > dicom_img_data->GetScalarComponentAsDouble(i, j, k, 0) ?
+    //                      dicom_img_data->GetScalarComponentAsDouble(i, j, k, 0) :
+    //                      min;
+    //            max = max < dicom_img_data->GetScalarComponentAsDouble(i, j, k, 0) ?
+    //                      dicom_img_data->GetScalarComponentAsDouble(i, j, k, 0) :
+    //                      max;
+    //        }
+    //std::cout << min << ", " << max << std::endl; // -1024 3071
+
     std::filesystem::path nii_file_path{argv[2]};
     vtkNew<vtkNIFTIImageReader> nii_reader;
     if (!nii_reader->CanReadFile(nii_file_path.string().c_str()))
@@ -114,6 +167,25 @@ int main(int argc, char* argv[])
     std::cout << nii_img_data->GetScalarTypeAsString() << std::endl; // double
     std::cout << nii_img_data->GetDimensions()[0] << ", " << nii_img_data->GetDimensions()[1] << ", "
               << nii_img_data->GetDimensions()[2] << std::endl;
+
+    // find mask shape center
+    vtkNew<vtkMarchingCubes> surface;
+    surface->SetInputData(nii_img_data);
+    surface->ComputeNormalsOn();
+    surface->SetValue(0, 255);
+    surface->Update();
+    vtkNew<vtkCenterOfMass> com;
+    com->SetInputData(surface->GetOutput());
+    com->SetUseScalarsAsWeights(true);
+    com->Update();
+    double center[3];
+    com->GetCenter(center);
+    // FIXME: z position is correct, but x, y positions require calibration
+    std::cout << "center before calibration: " << center[0] << ", " << center[1] << ", " << center[2] << std::endl;
+    auto* dims = dicom_img_data->GetDimensions();
+    center[0] *= dims[0] / (double)dims[2];
+    center[1] *= dims[1] / (double)dims[2];
+    std::cout << "center after calibration: " << center[0] << ", " << center[1] << ", " << center[2] << std::endl;
 
 #ifdef REQUIRE_TRANSFORM_AXIS
     // my sample nii changed original dicom oreitation (simpleITK), so have to transform it here
@@ -140,7 +212,7 @@ int main(int argc, char* argv[])
     mask->SetImageInputData(dicom_img_data);
     mask->SetMaskInputData(mask_img_data);
     mask->SetNotMask(true);
-    mask->SetMaskedOutputValue(-1e5);
+    mask->SetMaskedOutputValue(3072);
     mask->Update();
     std::cout << mask->GetOutput()->GetScalarTypeAsString() << std::endl; // short
 
@@ -155,6 +227,7 @@ int main(int argc, char* argv[])
     vtkNew<vtkImageViewer2> viewer;
     viewer->SetInputConnection(dicom_reslice->GetOutputPort());
     viewer->SetSliceOrientationToXY();
+    viewer->SetSlice(center[2]);  // set to mask shape center
 
     vtkNew<vtkRenderWindowInteractor> interactor;
     vtkNew<myInteractorStyler> style;
