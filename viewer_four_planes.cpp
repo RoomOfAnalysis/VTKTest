@@ -358,6 +358,12 @@ int main(int argc, char* argv[])
     sagittal_viewer->SetInputConnection(dicom_reader->GetOutputPort());
     sagittal_viewer->GetWindowLevel()->SetWindow(500);
     sagittal_viewer->SetSliceOrientationToYZ();
+    // correct orientation
+    if (auto* render = sagittal_viewer->GetRenderer(); render)
+    {
+        if (auto* camera = render->GetActiveCamera(); camera)
+            camera->Roll(180);
+    }
     sagittal_viewer->Render();
 
     // coronal viewer
@@ -365,6 +371,19 @@ int main(int argc, char* argv[])
     coronal_viewer->SetInputConnection(dicom_reader->GetOutputPort());
     coronal_viewer->GetWindowLevel()->SetWindow(500);
     coronal_viewer->SetSliceOrientationToXZ();
+    // correct orientation
+    if (auto* render = coronal_viewer->GetRenderer(); render)
+    {
+        if (auto* camera = render->GetActiveCamera(); camera)
+        {
+            auto* camera_pos = camera->GetPosition();
+            camera->SetPosition(camera_pos[0], -camera_pos[1], camera_pos[2]);
+            double scale = camera->GetParallelScale();
+            render->ResetCamera();
+            camera->SetParallelScale(scale);
+            camera->Roll(180);
+        }
+    }
     coronal_viewer->Render();
 
     // axial viewer
