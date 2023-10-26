@@ -135,7 +135,6 @@ private:
         {
             draw_cross_line(slice_no, i);
             m_image_viewers[i]->SetSlice(slice_no[i]);
-            m_image_viewers[i]->Render();
         }
 
         Interactor->Render();
