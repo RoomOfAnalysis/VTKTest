@@ -24,6 +24,9 @@
 #include <vtkImageMapToWindowLevelColors.h>
 #include <vtkLineSource.h>
 #include <vtkPointData.h>
+#include <vtkImageData.h>
+#include <vtkInteractorStyleImage.h>
+#include <vtkImageActor.h>
 
 #include <iostream>
 #include <sstream>
@@ -31,6 +34,8 @@
 #include <string>
 #include <filesystem>
 #include <array>
+
+//#define M_DEBUG
 
 class myCameraMotionInteractorStyle: public vtkInteractorStyleTrackballCamera
 {
@@ -59,54 +64,50 @@ public:
         m_image_viewers[1] = coronal_viewer;
         m_image_viewers[2] = axial_viewer;
 
+        auto* dims = m_image_viewers[0]->GetInput()->GetDimensions();
+
+        // YZ
+        m_crossline_sources[0] = vtkSmartPointer<vtkLineSource>::New();
+        m_crossline_sources[0]->SetPoint1(0, -dims[1], 0);
+        m_crossline_sources[0]->SetPoint2(0, dims[1], 0);
+        m_crossline_sources[0]->Update();
+        m_crossline_sources[1] = vtkSmartPointer<vtkLineSource>::New();
+        m_crossline_sources[1]->SetPoint1(0, 0, -dims[2]);
+        m_crossline_sources[1]->SetPoint2(0, 0, dims[2]);
+        m_crossline_sources[1]->Update();
+
+        // XZ
+        m_crossline_sources[2] = vtkSmartPointer<vtkLineSource>::New();
+        m_crossline_sources[2]->SetPoint1(-dims[0], 0, 0);
+        m_crossline_sources[2]->SetPoint2(dims[0], 0, 0);
+        m_crossline_sources[2]->Update();
+        m_crossline_sources[3] = vtkSmartPointer<vtkLineSource>::New();
+        m_crossline_sources[3]->SetPoint1(0, 0, -dims[2]);
+        m_crossline_sources[3]->SetPoint2(0, 0, dims[2]);
+        m_crossline_sources[3]->Update();
+
+        // XY
+        m_crossline_sources[4] = vtkSmartPointer<vtkLineSource>::New();
+        m_crossline_sources[4]->SetPoint1(-dims[0], 0, 0);
+        m_crossline_sources[4]->SetPoint2(dims[0], 0, 0);
+        m_crossline_sources[4]->Update();
+        m_crossline_sources[5] = vtkSmartPointer<vtkLineSource>::New();
+        m_crossline_sources[5]->SetPoint1(0, -dims[1], 0);
+        m_crossline_sources[5]->SetPoint2(0, dims[1], 0);
+        m_crossline_sources[5]->Update();
+
+        double colors[3][3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
         for (auto i = 0; i < 3; i++)
         {
-            m_slice_rng[i * 2] = m_image_viewers[i]->GetSliceMin();
-            m_slice_rng[i * 2 + 1] = m_image_viewers[i]->GetSliceMax();
-
-            m_crossline_renderers[i] = vtkSmartPointer<vtkRenderer>::New();
-            m_crossline_renderers[i]->SetLayer(1);
-            m_crossline_renderers[i]->InteractiveOff();
-            m_image_viewers[i]->GetRenderer()->SetLayer(0);
-            auto* window = m_image_viewers[i]->GetRenderWindow();
-            window->SetNumberOfLayers(2);
-            window->AddRenderer(m_crossline_renderers[i]);
-        }
-    }
-
-    void setXYZRng(double xmin, double xmax, double ymin, double ymax, double zmin, double zmax)
-    {
-        m_xyz_rng[0] = xmin;
-        m_xyz_rng[1] = xmax;
-        m_xyz_rng[2] = ymin;
-        m_xyz_rng[3] = ymax;
-        m_xyz_rng[4] = zmin;
-        m_xyz_rng[5] = zmax;
-
-        for (auto i = 0; i < 3; i++)
-        {
-            auto* sz = m_image_viewers[i]->GetSize();
-            m_crossline_sources[i * 2] = vtkSmartPointer<vtkLineSource>::New();
-            m_crossline_sources[i * 2 + 1] = vtkSmartPointer<vtkLineSource>::New();
-            m_crossline_sources[i * 2]->SetPoint1(-sz[0], 0, 0.01);
-            m_crossline_sources[i * 2]->SetPoint2(sz[0], 0, 0.01);
-            m_crossline_sources[i * 2]->Update();
-            m_crossline_sources[i * 2 + 1]->SetPoint1(0, -sz[1], 0.01);
-            m_crossline_sources[i * 2 + 1]->SetPoint2(0, sz[1], 0.01);
-            m_crossline_sources[i * 2 + 1]->Update();
-
             for (auto j = 0; j < 2; j++)
             {
                 vtkNew<vtkPolyDataMapper> mapper;
                 mapper->SetInputConnection(m_crossline_sources[i * 2 + j]->GetOutputPort());
                 vtkNew<vtkActor> actor;
                 actor->SetMapper(mapper);
-                actor->SetScale(10);
-                if (j == 0)
-                    actor->GetProperty()->SetColor(1, 0, 0);
-                else
-                    actor->GetProperty()->SetColor(0, 1, 0);
-                m_crossline_renderers[i]->AddActor(actor);
+                actor->GetProperty()->SetLineWidth(2);
+                actor->GetProperty()->SetColor(colors[j]);
+                m_image_viewers[i]->GetRenderer()->AddActor(actor);
             }
         }
     }
@@ -133,8 +134,8 @@ private:
         auto slice_no = point_to_slice(tgt_pos);
         for (auto i = 0; i < 3; i++)
         {
-            draw_cross_line(slice_no, i);
             m_image_viewers[i]->SetSlice(slice_no[i]);
+            draw_cross_line(tgt_pos, i);
         }
 
         Interactor->Render();
@@ -142,19 +143,14 @@ private:
 
     [[nodiscard]] std::array<int, 3> point_to_slice(double* point) const
     {
-        return {static_cast<int>((point[0] - m_xyz_rng[0]) / (m_xyz_rng[1] - m_xyz_rng[0]) *
-                                 (m_slice_rng[1] - m_slice_rng[0])) +
-                    m_slice_rng[0],
-                static_cast<int>((point[1] - m_xyz_rng[2]) / (m_xyz_rng[3] - m_xyz_rng[2]) *
-                                 (m_slice_rng[3] - m_slice_rng[2])) +
-                    m_slice_rng[2],
-                static_cast<int>((point[2] - m_xyz_rng[4]) / (m_xyz_rng[5] - m_xyz_rng[4]) *
-                                 (m_slice_rng[5] - m_slice_rng[4])) +
-                    m_slice_rng[4]};
+        auto* spacing = m_image_viewers[0]->GetInput()->GetSpacing();
+        return {static_cast<int>(point[0] / spacing[0]), static_cast<int>(point[1] / spacing[1]),
+                static_cast<int>(point[2] / spacing[2])};
     }
 
-    void draw_cross_line(std::array<int, 3> const& point, int viewer_idx)
+    void draw_cross_line(double* point, int viewer_idx)
     {
+#ifdef M_DEBUG
         if (!m_sphere)
         {
             vtkNew<vtkPolyDataMapper> mapper1;
@@ -173,35 +169,39 @@ private:
 
         m_sphere->SetCenter(point[0], point[1], point[2]);
         m_sphere->Update();
+#endif
 
-        for (auto i = 0; i < 3; i++)
+        auto* sz = m_image_viewers[viewer_idx]->GetSize();
+
+        if (viewer_idx == 0)
         {
-            int x = 0, y = 0;
-            switch (i)
-            {
-            case 0: // YZ
-                x = point[1];
-                y = point[2];
-                break;
-            case 1: // XZ
-                x = point[0];
-                y = point[2];
-                break;
-            case 2: // XY
-                x = point[0];
-                y = point[1];
-                break;
-            default:
-                break;
-            }
-            auto* sz = m_image_viewers[i]->GetSize();
-            m_crossline_sources[i * 2]->SetPoint1(-sz[0], y, 0.01);
-            m_crossline_sources[i * 2]->SetPoint2(sz[0], y, 0.01);
-            m_crossline_sources[i * 2]->Update();
-            m_crossline_sources[i * 2 + 1]->SetPoint1(x, -sz[1], 0.01);
-            m_crossline_sources[i * 2 + 1]->SetPoint2(x, sz[1], 0.01);
-            m_crossline_sources[i * 2 + 1]->Update();
+            m_crossline_sources[0]->SetPoint1(point[0], -sz[0] * 2, point[2]);
+            m_crossline_sources[0]->SetPoint2(point[0], sz[0] * 2, point[2]);
+            m_crossline_sources[0]->Update();
+            m_crossline_sources[1]->SetPoint1(point[0], point[1], -sz[1] * 2);
+            m_crossline_sources[1]->SetPoint2(point[0], point[1], sz[1] * 2);
+            m_crossline_sources[1]->Update();
         }
+        else if (viewer_idx == 1)
+        {
+            m_crossline_sources[2]->SetPoint1(-sz[0] * 2, point[1], point[2]);
+            m_crossline_sources[2]->SetPoint2(sz[0] * 2, point[1], point[2]);
+            m_crossline_sources[2]->Update();
+            m_crossline_sources[3]->SetPoint1(point[0], point[1], -sz[1] * 2);
+            m_crossline_sources[3]->SetPoint2(point[0], point[1], sz[1] * 2);
+            m_crossline_sources[3]->Update();
+        }
+        else if (viewer_idx == 2)
+        {
+            m_crossline_sources[4]->SetPoint1(-sz[0] * 2, point[1], point[2] + 1);
+            m_crossline_sources[4]->SetPoint2(sz[0] * 2, point[1], point[2] + 1);
+            m_crossline_sources[4]->Update();
+            m_crossline_sources[5]->SetPoint1(point[0], -sz[1] * 2, point[2] + 1);
+            m_crossline_sources[5]->SetPoint2(point[0], sz[1] * 2, point[2] + 1);
+            m_crossline_sources[5]->Update();
+        }
+        m_image_viewers[viewer_idx]->GetRenderer()->ResetCameraClippingRange();
+        m_image_viewers[viewer_idx]->Render();
     }
 
 private:
@@ -209,13 +209,11 @@ private:
     vtkPolyData* m_path_data = nullptr;
     int m_current_camera_pos_index = 0;
 
-    double m_xyz_rng[6]{};
     vtkImageViewer2* m_image_viewers[3]{};
-    int m_slice_rng[6]{};
 
+#ifdef M_DEBUG
     vtkSmartPointer<vtkSphereSource> m_sphere = {};
-
-    vtkSmartPointer<vtkRenderer> m_crossline_renderers[3] = {};
+#endif
     vtkSmartPointer<vtkLineSource> m_crossline_sources[6] = {};
 };
 vtkStandardNewMacro(myCameraMotionInteractorStyle);
@@ -392,9 +390,14 @@ int main(int argc, char* argv[])
     axial_viewer->SetSliceOrientationToXY();
     axial_viewer->Render();
 
+#ifdef M_DEBUG
+    vtkNew<vtkInteractorStyleTrackballCamera> st;
+    vtkNew<vtkRenderWindowInteractor> it;
+    it->SetInteractorStyle(st);
+    sagittal_viewer->GetRenderWindow()->SetInteractor(it);
+#endif
+
     style->setImageViewers(sagittal_viewer, coronal_viewer, axial_viewer);
-    auto* bounds = mapper->GetBounds();
-    style->setXYZRng(bounds[0], bounds[1], bounds[2], bounds[3], bounds[4], bounds[5]);
 
     vtkNew<vtkRenderWindow> m_render_window;
     m_render_window->SetSize(500, 500);
