@@ -31,6 +31,7 @@
 #include <vtkPolyLine.h>
 #include <vtkCellArray.h>
 #include <vtkSphereSource.h>
+#include <vtkCubeAxesActor.h>
 
 #include <filesystem>
 #include <iostream>
@@ -175,6 +176,24 @@ public:
         {
             m_points = vtkSmartPointer<vtkPoints>::New();
         }
+        else if (Interactor->GetKeyCode() == 'x')
+        {
+            double pos_x = m_plane_widget->GetCenter()[0];
+            m_plane_widget->SetPlaneOrientationToXAxes();
+            m_plane_widget->SetSlicePosition(pos_x);
+        }
+        else if (Interactor->GetKeyCode() == 'y')
+        {
+            double pos_y = m_plane_widget->GetCenter()[1];
+            m_plane_widget->SetPlaneOrientationToYAxes();
+            m_plane_widget->SetSlicePosition(pos_y);
+        }
+        else if (Interactor->GetKeyCode() == 'z')
+        {
+            double pos_z = m_plane_widget->GetCenter()[2];
+            m_plane_widget->SetPlaneOrientationToZAxes();
+            m_plane_widget->SetSlicePosition(pos_z);
+        }
         else if (Interactor->GetKeyCode() == 'r') // reset slice plane orientation and pos
         {
             switch (m_original_plane_orientation)
@@ -315,14 +334,36 @@ int main(int argc, char* argv[])
     cam_orient_manipulator->SetParentRenderer(renderer);
     vtkCameraOrientationRepresentation::SafeDownCast(cam_orient_manipulator->GetRepresentation())->AnchorToLowerRight();
 
-    vtkNew<vtkImageDataOutlineFilter> outline;
-    outline->SetInputConnection(dicom_reader->GetOutputPort());
-    vtkNew<vtkPolyDataMapper> outline_mapper;
-    outline_mapper->SetInputConnection(outline->GetOutputPort());
-    vtkNew<vtkActor> outline_actor;
-    outline_actor->SetMapper(outline_mapper);
-    outline_actor->GetProperty()->SetColor(1, 0, 0);
-    renderer->AddActor(outline_actor);
+    //vtkNew<vtkImageDataOutlineFilter> outline;
+    //outline->SetInputConnection(dicom_reader->GetOutputPort());
+    //vtkNew<vtkPolyDataMapper> outline_mapper;
+    //outline_mapper->SetInputConnection(outline->GetOutputPort());
+    //vtkNew<vtkActor> outline_actor;
+    //outline_actor->SetMapper(outline_mapper);
+    //outline_actor->GetProperty()->SetColor(1, 0, 0);
+    //renderer->AddActor(outline_actor);
+
+    // cube axis with dimension labels instead of simple outline
+    vtkNew<vtkCubeAxesActor> cube_axis_actor;
+    cube_axis_actor->SetUseTextActor3D(1);
+    cube_axis_actor->SetBounds(dicom_reader->GetOutput()->GetBounds());
+    cube_axis_actor->SetCamera(renderer->GetActiveCamera());
+    cube_axis_actor->GetTitleTextProperty(0)->SetColor(1, 0, 0);
+    cube_axis_actor->GetTitleTextProperty(0)->SetFontSize(48);
+    cube_axis_actor->GetLabelTextProperty(0)->SetColor(1, 1, 1);
+    cube_axis_actor->GetTitleTextProperty(1)->SetColor(0, 1, 0);
+    cube_axis_actor->GetLabelTextProperty(1)->SetColor(1, 1, 1);
+    cube_axis_actor->GetTitleTextProperty(2)->SetColor(0, 0, 1);
+    cube_axis_actor->GetLabelTextProperty(2)->SetColor(1, 1, 1);
+    cube_axis_actor->DrawXGridlinesOn();
+    cube_axis_actor->DrawYGridlinesOn();
+    cube_axis_actor->DrawZGridlinesOn();
+    cube_axis_actor->SetGridLineLocation(cube_axis_actor->VTK_GRID_LINES_FURTHEST);
+    cube_axis_actor->XAxisMinorTickVisibilityOff();
+    cube_axis_actor->YAxisMinorTickVisibilityOff();
+    cube_axis_actor->ZAxisMinorTickVisibilityOff();
+    cube_axis_actor->SetFlyModeToStaticEdges();
+    renderer->AddActor(cube_axis_actor);
 
     vtkNew<vtkImagePlaneWidget> plane_widget;
     plane_widget->SetInteractor(interactor);
@@ -384,6 +425,8 @@ int main(int argc, char* argv[])
     interactor->Initialize();
     cam_orient_manipulator->On();
     plane_widget->On();
+
+    renderer->ResetCamera();  // reset camera clipping range to show all actors
     render_window->Render();
     interactor->Start();
 
