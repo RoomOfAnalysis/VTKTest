@@ -427,8 +427,7 @@ int main(int argc, char* argv[])
     plane_widget->On();
 
     renderer->ResetCamera();  // reset camera clipping range to show all actors
-    render_window->Render();
-    interactor->Start();
+    interactor->Render();
 
     return 0;
 }
