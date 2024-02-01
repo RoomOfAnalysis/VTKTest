@@ -358,8 +358,7 @@ int main(int argc, char* argv[])
     // correct orientation
     if (auto* render = sagittal_viewer->GetRenderer(); render)
     {
-        if (auto* camera = render->GetActiveCamera(); camera)
-            camera->Roll(180);
+        if (auto* camera = render->GetActiveCamera(); camera) camera->Roll(180);
     }
     sagittal_viewer->Render();
 

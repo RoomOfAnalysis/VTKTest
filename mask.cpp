@@ -227,7 +227,7 @@ int main(int argc, char* argv[])
     vtkNew<vtkImageViewer2> viewer;
     viewer->SetInputConnection(dicom_reslice->GetOutputPort());
     viewer->SetSliceOrientationToXY();
-    viewer->SetSlice(center[2]);  // set to mask shape center
+    viewer->SetSlice(center[2]); // set to mask shape center
 
     vtkNew<vtkRenderWindowInteractor> interactor;
     vtkNew<myInteractorStyler> style;

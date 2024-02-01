@@ -132,16 +132,21 @@ int main(int argc, char* argv[])
     img_cast->SetOutputScalarTypeToShort();
     img_cast->Update();
 
-    constexpr int window = 1000;
-    constexpr int level = 500;
+    constexpr int window = 1400;
+    constexpr int level = -500;
 
-    //vtkNew<vtkLookupTable> dicom_table;
-    //dicom_table->SetRange(dicom_img_data->GetScalarRange());
-    //dicom_table->Build();
+    std::cout << "dicom image data scalar range: " << dicom_img_data->GetScalarRange()[0] << ", "
+              << dicom_img_data->GetScalarRange()[1] << '\n';
+    vtkNew<vtkLookupTable> dicom_table;
+    dicom_table->SetRange(level - window / 2.0, level + window / 2.0); // L - W/2.0, L + W/2.0
+    dicom_table->SetValueRange(0, 1);
+    dicom_table->SetSaturationRange(0, 0);
+    dicom_table->SetRampToLinear();
+    dicom_table->Build();
 
     vtkNew<vtkImageResliceToColors> dicom_reslice;
     dicom_reslice->SetOutputFormatToRGB();
-    //dicom_reslice->SetLookupTable(dicom_table);
+    dicom_reslice->SetLookupTable(dicom_table);
     dicom_reslice->SetInputData(dicom_img_data);
     dicom_reslice->Update();
 

@@ -426,7 +426,7 @@ int main(int argc, char* argv[])
     cam_orient_manipulator->On();
     plane_widget->On();
 
-    renderer->ResetCamera();  // reset camera clipping range to show all actors
+    renderer->ResetCamera(); // reset camera clipping range to show all actors
     interactor->Render();
 
     return 0;
