@@ -129,6 +129,18 @@ protected:
     {
         if (m_current_camera_pos_index > 1) moveCameraToNthPos(--m_current_camera_pos_index);
     }
+    void OnChar() override
+    {
+        auto* rwi = GetInteractor();
+        auto key = rwi->GetKeyCode();
+        if (key == 'r')
+        {
+            auto* renderer = rwi->GetRenderWindow()->GetRenderers()->GetFirstRenderer();
+            auto* camera = renderer->GetActiveCamera();
+            camera->Roll(10); // Roll
+            rwi->Render();
+        }
+    }
 
 private:
     void moveCameraToNthPos(int n)
