@@ -32,6 +32,9 @@
 #include <vtkCellArray.h>
 #include <vtkSphereSource.h>
 #include <vtkCubeAxesActor.h>
+#include <vtkOrientationMarkerWidget.h>
+#include <vtkAnnotatedCubeActor.h>
+#include <vtkNamedColors.h>
 
 #include <filesystem>
 #include <iostream>
@@ -262,6 +265,31 @@ private:
 };
 vtkStandardNewMacro(myInteractorStyle);
 
+vtkSmartPointer<vtkAnnotatedCubeActor> MakeAnnotatedCubeActor(vtkNamedColors* colors)
+{
+    // A cube with labeled faces.
+    vtkNew<vtkAnnotatedCubeActor> cube;
+    cube->SetXPlusFaceText("R");  // Right
+    cube->SetXMinusFaceText("L"); // Left
+    cube->SetYPlusFaceText("A");  // Anterior
+    cube->SetYMinusFaceText("P"); // Posterior
+    cube->SetZPlusFaceText("S");  // Superior/Cranial
+    cube->SetZMinusFaceText("I"); // Inferior/Caudal
+    cube->SetFaceTextScale(0.5);
+    cube->GetCubeProperty()->SetColor(colors->GetColor3d("Gainsboro").GetData());
+
+    cube->GetTextEdgesProperty()->SetColor(colors->GetColor3d("LightSlateGray").GetData());
+
+    // Change the vector text colors.
+    cube->GetXPlusFaceProperty()->SetColor(colors->GetColor3d("Tomato").GetData());
+    cube->GetXMinusFaceProperty()->SetColor(colors->GetColor3d("Tomato").GetData());
+    cube->GetYPlusFaceProperty()->SetColor(colors->GetColor3d("DeepSkyBlue").GetData());
+    cube->GetYMinusFaceProperty()->SetColor(colors->GetColor3d("DeepSkyBlue").GetData());
+    cube->GetZPlusFaceProperty()->SetColor(colors->GetColor3d("SeaGreen").GetData());
+    cube->GetZMinusFaceProperty()->SetColor(colors->GetColor3d("SeaGreen").GetData());
+    return cube;
+}
+
 int main(int argc, char* argv[])
 {
     if (argc != 2)
@@ -365,6 +393,15 @@ int main(int argc, char* argv[])
     cube_axis_actor->SetFlyModeToStaticEdges();
     renderer->AddActor(cube_axis_actor);
 
+    // https://examples.vtk.org/site/Cxx/VisualizationAlgorithms/AnatomicalOrientation/
+    // Dicom LPS coordinate system
+    vtkNew<vtkNamedColors> colors;
+    auto annotated_cube_axis_actor = MakeAnnotatedCubeActor(colors);
+    vtkNew<vtkOrientationMarkerWidget> oriebtation_makrer_widget;
+    oriebtation_makrer_widget->SetOrientationMarker(annotated_cube_axis_actor);
+    oriebtation_makrer_widget->SetViewport(0, 0, 0.2, 0.2); // lower left in the viewport
+    oriebtation_makrer_widget->SetInteractor(interactor);
+
     vtkNew<vtkImagePlaneWidget> plane_widget;
     plane_widget->SetInteractor(interactor);
 
@@ -422,12 +459,15 @@ int main(int argc, char* argv[])
     plane_actor->SetTexture(plane_widget->GetTexture());
     renderer_plane->AddActor(plane_actor);
 
+    render_window->Render();
     interactor->Initialize();
     cam_orient_manipulator->On();
     plane_widget->On();
+    oriebtation_makrer_widget->On();
+    oriebtation_makrer_widget->InteractiveOff(); // diable draging movement
 
     renderer->ResetCamera(); // reset camera clipping range to show all actors
-    interactor->Render();
+    interactor->Start();
 
     return 0;
 }
