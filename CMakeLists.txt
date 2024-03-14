@@ -15,11 +15,13 @@ if(WIN32)
 endif()
 
 find_package(VTK 9.2 REQUIRED)
+find_package(DCMTK CONFIG REQUIRED)
 find_package(DICOM REQUIRED)
 
 function(add_exe name)
 	add_executable(${name} ${name}.cpp)
     target_link_libraries(${name}
+        PRIVATE DCMTK::DCMTK
         PRIVATE VTK::DICOM
         PRIVATE ${VTK_LIBRARIES}
     )
@@ -39,3 +41,4 @@ add_exe(viewer_3d_plane)
 add_exe(overlay)
 add_exe(blend)
 add_exe(rotate_scene)
+add_exe(slice_direction)
