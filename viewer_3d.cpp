@@ -109,7 +109,7 @@ public:
     myCameraMotionInteractorStyle() = default;
     ~myCameraMotionInteractorStyle() = default;
 
-    void setPathPoints(vtkPolyData* path_data)
+    virtual void setPathPoints(vtkPoints* path_data)
     {
         m_path_data = path_data;
         auto* renderer = Interactor->GetRenderWindow()->GetRenderers()->GetFirstRenderer();
@@ -127,7 +127,7 @@ protected:
     }
     void OnMouseWheelBackward() override
     {
-        if (m_current_camera_pos_index > 1) moveCameraToNthPos(--m_current_camera_pos_index);
+        if (m_current_camera_pos_index > 0) moveCameraToNthPos(--m_current_camera_pos_index);
     }
     void OnChar() override
     {
@@ -141,60 +141,90 @@ protected:
             rwi->Render();
         }
     }
-
-private:
-    void moveCameraToNthPos(int n)
+    virtual void moveCameraToNthPos(int n)
     {
         auto* renderer = Interactor->GetRenderWindow()->GetRenderers()->GetFirstRenderer();
         auto* camera = renderer->GetActiveCamera();
-        camera->SetPosition(m_path_data->GetPoint(n - 1));
+        camera->SetPosition(m_path_data->GetPoint(n));
         camera->SetFocalPoint(m_path_data->GetPoint(n + 1));
         Interactor->Render();
     }
 
-private:
-    vtkPolyData* m_path_data = nullptr;
+    vtkPoints* m_path_data = nullptr;
     int m_current_camera_pos_index = 0;
 };
 vtkStandardNewMacro(myCameraMotionInteractorStyle);
 
-int main(int argc, char* argv[])
+class myCameraMotionInteractorStyle2: public myCameraMotionInteractorStyle
 {
-#ifdef WITH_PATH
-    if (argc != 3)
+public:
+    static myCameraMotionInteractorStyle2* New();
+    vtkTypeMacro(myCameraMotionInteractorStyle2, myCameraMotionInteractorStyle);
+
+    myCameraMotionInteractorStyle2() = default;
+    ~myCameraMotionInteractorStyle2() = default;
+
+    void setPathPoints(vtkPoints* path_data) override
     {
-        std::cerr << "1) obj file path; 2) path points file" << std::endl;
-        return 1;
+        m_path_data = path_data;
+        m_path_polydata = vtkSmartPointer<vtkPolyData>::New();
+        m_path_lines = vtkSmartPointer<vtkPolyLine>::New();
+        m_path_cells = vtkSmartPointer<vtkCellArray>::New();
+
+        m_path_lines->GetPointIds()->SetNumberOfIds(m_path_data->GetNumberOfPoints());
+        for (auto i = 0; i < m_path_data->GetNumberOfPoints(); i++)
+            m_path_lines->GetPointIds()->SetId(i, i);
+
+        m_path_cells->InsertNextCell(m_path_lines);
+
+        m_path_polydata->SetPoints(m_path_data);
+        m_path_polydata->SetLines(m_path_cells);
+
+        vtkNew<vtkPolyDataMapper> path_mapper;
+        path_mapper->SetInputData(m_path_polydata);
+        m_path_actor = vtkSmartPointer<vtkActor>::New();
+        m_path_actor->SetMapper(path_mapper);
+        vtkNew<vtkNamedColors> colors;
+        m_path_actor->GetProperty()->SetColor(colors->GetColor3d("Blue").GetData());
+        m_path_actor->GetProperty()->SetLineWidth(5);
+
+        auto* renderer = Interactor->GetRenderWindow()->GetRenderers()->GetFirstRenderer();
+        renderer->AddActor(m_path_actor);
+
+        auto* camera = renderer->GetActiveCamera();
+        camera->SetPosition(m_path_data->GetPoint(0));
+        camera->SetFocalPoint(m_path_data->GetPoint(1));
+        renderer->ResetCameraClippingRange();
     }
-#else
-    if (argc != 2)
+
+protected:
+    void moveCameraToNthPos(int n) override
     {
-        std::cerr << "1) obj file path" << std::endl;
-        return 1;
+        // start from focal point (n + 1)
+        auto N = m_path_data->GetNumberOfPoints() - n - 1;
+        m_path_lines->GetPointIds()->SetNumberOfIds(N);
+        for (auto i = 0; i < N; i++)
+            m_path_lines->GetPointIds()->SetId(i, n + 1 + i);
+        m_path_cells->Initialize();
+        m_path_cells->InsertNextCell(m_path_lines);
+        m_path_cells->Modified();
+        //m_path_polydata->Modified();
+
+        //std::cout << m_path_lines->GetNumberOfPoints() << '\n';
+
+        myCameraMotionInteractorStyle::moveCameraToNthPos(n);
     }
-#endif
 
-    auto model_data = ReadPolyData(argv[1]);
+    vtkSmartPointer<vtkPolyData> m_path_polydata{};
+    vtkSmartPointer<vtkCellArray> m_path_cells{};
+    vtkSmartPointer<vtkPolyLine> m_path_lines{};
 
-#ifdef WITH_PATH
-    vtkNew<vtkPoints> m_path_points;
-    std::ifstream fs(argv[2]);
-    std::string line;
-    while (std::getline(fs, line))
-    {
-        double x, y, z;
-        std::stringstream ss;
-        ss << line;
-        ss >> x >> y >> z;
-        m_path_points->InsertNextPoint(x, y, z);
-    }
-    fs.close();
-#endif
+    vtkSmartPointer<vtkActor> m_path_actor{};
+};
+vtkStandardNewMacro(myCameraMotionInteractorStyle2);
 
-    vtkNew<vtkNamedColors> colors;
-    auto backgound_color = colors->GetColor3d("Black");
-
-    // model
+vtkSmartPointer<vtkActor> GetObjActor(vtkPolyData* model_data)
+{
     vtkNew<vtkPolyDataMapper> mapper;
     mapper->SetInputData(model_data);
     vtkNew<vtkActor> m_obj_actor;
@@ -205,9 +235,13 @@ int main(int argc, char* argv[])
     m_obj_actor->GetProperty()->SetAmbient(0.8);
     m_obj_actor->GetProperty()->SetSpecular(0.1);
     m_obj_actor->GetProperty()->SetOpacity(1.0);
+    return m_obj_actor;
+}
 
-#ifdef WITH_PATH
-    // path
+vtkSmartPointer<vtkActor> GetPathActor(vtkPoints* m_path_points)
+{
+    vtkNew<vtkNamedColors> colors;
+
     vtkNew<vtkPolyData> path_data;
     path_data->SetPoints(m_path_points);
     vtkNew<vtkPolyLine> path_lines;
@@ -223,8 +257,13 @@ int main(int argc, char* argv[])
     path_actor->SetMapper(path_mapper);
     path_actor->GetProperty()->SetColor(colors->GetColor3d("Blue").GetData());
     path_actor->GetProperty()->SetLineWidth(5);
+    return path_actor;
+}
 
-    // endpoints
+vtkSmartPointer<vtkActor> GetEndpointsActor(vtkPoints* m_path_points)
+{
+    vtkNew<vtkNamedColors> colors;
+
     vtkNew<vtkPoints> endpoints;
     endpoints->InsertNextPoint(m_path_points->GetPoint(0));
     endpoints->InsertNextPoint(m_path_points->GetPoint(m_path_points->GetNumberOfPoints() - 1));
@@ -244,9 +283,11 @@ int main(int argc, char* argv[])
     vtkNew<vtkActor> endpoints_actor;
     endpoints_actor->GetProperty()->SetColor(colors->GetColor3d("Red").GetData());
     endpoints_actor->SetMapper(endpoints_mapper);
-#endif
+    return endpoints_actor;
+}
 
-    // fps
+void DisplayFPS(vtkRenderer* m_renderer)
+{
     vtkNew<vtkCornerAnnotation> corner_overlay;
     corner_overlay->GetTextProperty()->SetColor(1.0, 0.72, 0.0);
     corner_overlay->SetText(vtkCornerAnnotation::UpperRight, "FPS: 0");
@@ -264,25 +305,67 @@ int main(int argc, char* argv[])
             corner_overlay->SetText(vtkCornerAnnotation::UpperRight, out.str().c_str());
         });
     fps_callback->SetClientData(corner_overlay.Get());
-
-    vtkNew<vtkRenderer> m_renderer;
-    m_renderer->AddActor(m_obj_actor);
-#ifdef WITH_PATH
-    m_renderer->AddActor(path_actor);
-    m_renderer->AddActor(endpoints_actor);
-#endif
     m_renderer->AddViewProp(corner_overlay);
     m_renderer->AddObserver(vtkCommand::EndEvent, fps_callback);
+}
+
+int main(int argc, char* argv[])
+{
+#ifdef WITH_PATH
+    if (argc != 3)
+    {
+        std::cerr << "1) obj file path; 2) path points file" << std::endl;
+        return 1;
+    }
+#else
+    if (argc != 2)
+    {
+        std::cerr << "1) obj file path" << std::endl;
+        return 1;
+    }
+#endif
+
+    auto model_data = ReadPolyData(argv[1]);
+
+    vtkNew<vtkNamedColors> colors;
+    auto backgound_color = colors->GetColor3d("Black");
+    vtkNew<vtkRenderer> m_renderer;
     m_renderer->SetBackground(backgound_color.GetData());
+    // fps
+    DisplayFPS(m_renderer);
+    // model
+    m_renderer->AddActor(GetObjActor(model_data));
+
+#ifdef WITH_PATH
+    vtkNew<vtkPoints> m_path_points;
+    std::ifstream fs(argv[2]);
+    std::string line;
+    while (std::getline(fs, line))
+    {
+        double x, y, z;
+        std::stringstream ss;
+        ss << line;
+        ss >> x >> y >> z;
+        m_path_points->InsertNextPoint(x, y, z);
+    }
+    fs.close();
+
+    // path
+    //m_renderer->AddActor(GetPathActor(m_path_points));
+    // endpoints
+    //m_renderer->AddActor(GetEndpointsActor(m_path_points));
+#else
+    // watch all components
     m_renderer->ResetCamera();
     m_renderer->GetActiveCamera()->Azimuth(0);
     m_renderer->GetActiveCamera()->Elevation(-85);
     m_renderer->GetActiveCamera()->Dolly(1.2);
     m_renderer->ResetCameraClippingRange();
+#endif
 
     vtkNew<vtkRenderWindowInteractor> interactor;
 #ifdef WITH_PATH
-    vtkNew<myCameraMotionInteractorStyle> style;
+    vtkNew<myCameraMotionInteractorStyle2> style;
 #else
     vtkNew<vtkInteractorStyleTrackballCamera> style;
 #endif
@@ -300,7 +383,7 @@ int main(int argc, char* argv[])
 
     interactor->Initialize();
 #ifdef WITH_PATH
-    style->setPathPoints(path_data);
+    style->setPathPoints(m_path_points);
 #endif
 
     m_render_window->Render();
