@@ -22,6 +22,9 @@
 #include <vtkRenderer.h>
 #include <vtkRenderWindow.h>
 
+#include <vtkMarchingCubes.h>
+#include <vtkCenterOfMass.h>
+
 #include <filesystem>
 #include <iostream>
 #include <sstream>
@@ -33,12 +36,13 @@ public:
 
     vtkTypeMacro(myInteractorStyler, vtkInteractorStyleImage);
 
-    void setImageViewer(vtkImageViewer2* imageViewer)
+    void setImageViewer(vtkImageViewer2* imageViewer, int slice_no = 0)
     {
         m_viewer = imageViewer;
         m_slice_min = imageViewer->GetSliceMin();
         m_slice_max = imageViewer->GetSliceMax();
-        m_slice = (m_slice_min + m_slice_max) / 2;
+        m_slice = slice_no <= 0 ? (m_slice_min + m_slice_max) / 2 : slice_no;
+        m_viewer->SetSlice(m_slice);
     }
 
 protected:
@@ -118,17 +122,28 @@ int main(int argc, char* argv[])
     std::cout << nii_img_data->GetDimensions()[0] << ", " << nii_img_data->GetDimensions()[1] << ", "
               << nii_img_data->GetDimensions()[2] << std::endl;
 
-    auto mask_img = nii_img_data;
+    vtkNew<vtkMarchingCubes> surface;
+    surface->SetInputData(nii_img_data);
+    surface->ComputeNormalsOn();
+    surface->SetValue(0, 1);
+    surface->Update();
 
-    vtkNew<vtkImageCast> mask_cast;
-    mask_cast->SetInputData(mask_img); // nii_img_data
-    mask_cast->SetOutputScalarTypeToUnsignedChar();
-    mask_cast->Update();
-    auto mask_img_data = mask_cast->GetOutput();
-    std::cout << mask_img_data->GetScalarTypeAsString() << std::endl; // unsigned char
+    double nii_center[3]{};
+    vtkNew<vtkCenterOfMass> com;
+    com->SetInputData(surface->GetOutput());
+    com->SetUseScalarsAsWeights(false);
+    com->Update();
+    com->GetCenter(nii_center);
+    auto* dims = nii_img_data->GetDimensions();
+    nii_center[0] *= dims[0] / (double)dims[2];
+    nii_center[1] *= dims[1] / (double)dims[2];
+    std::cout << "nii center:" << nii_center[0] << ", " << nii_center[1] << ", " << nii_center[2] << '\n';
+    // the above center may be incorrect according to the discussion in
+    // https://discourse.vtk.org/t/how-to-compute-surface-and-volume-based-center-of-masses-for-3d-geometries/3215
+    // https://discourse.vtk.org/t/bounding-box-of-vtkimagedata/2178
 
     vtkNew<vtkImageCast> img_cast;
-    img_cast->SetInputData(mask_img);
+    img_cast->SetInputData(nii_img_data);
     img_cast->SetOutputScalarTypeToShort();
     img_cast->Update();
 
@@ -177,7 +192,7 @@ int main(int argc, char* argv[])
 
     vtkNew<vtkRenderWindowInteractor> interactor;
     vtkNew<myInteractorStyler> style;
-    style->setImageViewer(viewer);
+    style->setImageViewer(viewer, int(nii_center[2] + 0.5));
     viewer->SetupInteractor(interactor);
     interactor->SetInteractorStyle(style);
 
