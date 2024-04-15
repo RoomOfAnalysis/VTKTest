@@ -29,6 +29,8 @@
 #include <fstream>
 #include <string>
 
+//#define PRINT_CAMERA_INFO
+
 vtkSmartPointer<vtkPolyData> ReadPolyData(const char* fileName)
 {
     vtkSmartPointer<vtkPolyData> polyData;
@@ -103,7 +105,6 @@ public:
     vtkTypeMacro(mInteractorStyle, vtkInteractorStyleTrackballCamera);
 
     void set_actor(vtkActor* actor) { m_obj_actor = actor; }
-    void set_renderer_to_sync_camera(vtkRenderer* renderer) { m_sync_renderer = renderer; }
 
     mInteractorStyle() = default;
     ~mInteractorStyle() = default;
@@ -155,29 +156,6 @@ protected:
 
             // Orhthogonalize View Up
             camera->OrthogonalizeViewUp();
-            camera->GetViewTransformMatrix()->PrintSelf(std::cout, vtkIndent{});
-
-            //renderer->ResetCameraClippingRange();
-
-            // if not reset the clipping range, it only changes when view angle changes (zoom)
-            double rng[2]{};
-            camera->GetClippingRange(rng);
-            std::cout << camera->GetUseExplicitProjectionTransformMatrix() << ": " << rng[0] << ", " << rng[1] << '\n';
-            // prjection matrix changes when view angle changes (zoom)
-            camera->GetProjectionTransformMatrix(rwi->GetRenderWindow()->GetRenderers()->GetFirstRenderer())
-                ->PrintSelf(std::cout, vtkIndent{});
-
-            // so position + focal point + viewup + view angle is enough to duplicate a camera
-            if (m_sync_renderer)
-            {
-                auto* sync_camera = m_sync_renderer->GetActiveCamera();
-                sync_camera->SetPosition(camera->GetPosition());
-                sync_camera->SetFocalPoint(camera->GetFocalPoint());
-                sync_camera->SetViewUp(camera->GetViewUp());
-                sync_camera->SetViewAngle(camera->GetViewAngle());
-                // need reset clipping range in case view angle changed
-                m_sync_renderer->ResetCameraClippingRange();
-            }
 
             rwi->Render();
         }
@@ -212,7 +190,6 @@ protected:
 
 private:
     vtkActor* m_obj_actor = nullptr;
-    vtkRenderer* m_sync_renderer = nullptr;
 };
 vtkStandardNewMacro(mInteractorStyle);
 
@@ -282,10 +259,43 @@ int main(int argc, char* argv[])
     n_renderer->GetActiveCamera()->Dolly(1.2);
     n_renderer->ResetCameraClippingRange();
 
+    // sync camera
+    vtkNew<vtkCallbackCommand> cb;
+    cb->SetCallback(
+        [](vtkObject* caller, long unsigned int vtkNotUsed(eventId), void* clientData, void* vtkNotUsed(callData)) {
+            vtkCamera* camera = static_cast<vtkCamera*>(caller);
+
+#ifdef PRINT_CAMERA_INFO
+            //camera->PrintSelf(std::cout, vtkIndent{});  // too verbose
+
+            camera->GetViewTransformMatrix()->PrintSelf(std::cout, vtkIndent{});
+            std::cout << "camera position: (" << camera->GetPosition()[0] << ", " << camera->GetPosition()[1] << ", "
+                      << camera->GetPosition()[2] << ")\n"
+                      << "camera focal point: (" << camera->GetFocalPoint()[0] << ", " << camera->GetFocalPoint()[1]
+                      << ", " << camera->GetFocalPoint()[2] << ")\n"
+                      << "camera viewup: (" << camera->GetViewUp()[0] << ", " << camera->GetViewUp()[1] << ", "
+                      << camera->GetViewUp()[2] << ")\n"
+                      << "camera clipping range: (" << camera->GetClippingRange()[0] << ", "
+                      << camera->GetClippingRange()[1] << ")\n\n"
+                      << std::endl;
+#endif
+
+            vtkRenderer* sync_renderer = static_cast<vtkRenderer*>(clientData);
+            vtkCamera* sync_camera = sync_renderer->GetActiveCamera();
+            // position / focal point / viewup (view matrix) + view angle (projection matrix) is enough to duplicate a camera
+            sync_camera->SetPosition(camera->GetPosition());
+            sync_camera->SetFocalPoint(camera->GetFocalPoint());
+            sync_camera->SetViewUp(camera->GetViewUp());
+            sync_camera->SetViewAngle(camera->GetViewAngle());
+            // need reset clipping range in case view angle changed
+            sync_renderer->ResetCameraClippingRange();
+        });
+    cb->SetClientData(n_renderer);
+    m_renderer->GetActiveCamera()->AddObserver(vtkCommand::ModifiedEvent, cb);
+
     vtkNew<vtkRenderWindowInteractor> interactor;
     vtkNew<mInteractorStyle> style;
     style->set_actor(m_obj_actor);
-    style->set_renderer_to_sync_camera(n_renderer);
     interactor->SetInteractorStyle(style);
 
     vtkNew<vtkRenderWindow> m_render_window;
