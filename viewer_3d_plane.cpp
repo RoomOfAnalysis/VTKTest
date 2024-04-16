@@ -267,14 +267,18 @@ vtkStandardNewMacro(myInteractorStyle);
 
 vtkSmartPointer<vtkAnnotatedCubeActor> MakeAnnotatedCubeActor(vtkNamedColors* colors)
 {
-    // A cube with labeled faces.
+    // LPS
+    // https://www.fieldtriptoolbox.org/faq/coordsys/
     vtkNew<vtkAnnotatedCubeActor> cube;
-    cube->SetXPlusFaceText("R");  // Right
-    cube->SetXMinusFaceText("L"); // Left
-    cube->SetYPlusFaceText("A");  // Anterior
-    cube->SetYMinusFaceText("P"); // Posterior
-    cube->SetZPlusFaceText("S");  // Superior/Cranial
-    cube->SetZMinusFaceText("I"); // Inferior/Caudal
+    cube->SetXPlusFaceText("L");  // Left
+    cube->SetXMinusFaceText("R"); // Right
+
+    // flipped due to vtkDICOMReader
+    cube->SetYPlusFaceText("A");  // Posterior
+    cube->SetYMinusFaceText("P"); // Anterior
+    cube->SetZMinusFaceText("S"); // Superior/Cranial
+    cube->SetZPlusFaceText("I");  // Inferior/Caudal
+
     cube->SetFaceTextScale(0.5);
     cube->GetCubeProperty()->SetColor(colors->GetColor3d("Gainsboro").GetData());
 
@@ -308,6 +312,17 @@ int main(int argc, char* argv[])
     sorter->SetInputFileNames(dicom_img_paths);
     sorter->Update();
     dicom_reader->SetFileNames(sorter->GetFileNamesForSeries(0));
+    // comment from vtkDICOMReader doc
+    // if not set memory row order, it will flip z axis
+    // which means the Superior/Inferior need to be flipped
+    // detailed discussion can be found in the following link
+    // https://vtkusers.public.kitware.narkive.com/Nzzv62Jr/correct-anatomical-orientation-of-volumes-from-niftii-and-dicom
+    /*!
+     *  If the order is BottomUp (which is the default) then
+     *  the images will be flipped when they are read from disk.
+     *  The native orientation of DICOM images is top-to-bottom.
+     */
+    //dicom_reader->SetMemoryRowOrderToFileNative();
     dicom_reader->SetDataByteOrderToLittleEndian();
     dicom_reader->Update(0);
     std::cout << dicom_reader->GetOutput()->GetScalarTypeAsString() << std::endl; // short

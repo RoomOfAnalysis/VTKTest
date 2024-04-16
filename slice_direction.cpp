@@ -22,6 +22,9 @@
 #include <vtkPlaneSource.h>
 #include <vtkPolyDataMapper.h>
 #include <vtkTextActor.h>
+#include <vtkAxesActor.h>
+#include <vtkCaptionActor2D.h>
+#include <vtkPropAssembly.h>
 
 #include <iostream>
 #include <filesystem>
@@ -29,85 +32,86 @@
 #include <string_view>
 #include <charconv>
 
-// https://www.cnblogs.com/h2zZhou/p/9072967.html
-static std::string ComputeOrientation(vtkVector3<double> const& vector)
-{
-    std::cout << vector << '\n';
+//// https://www.cnblogs.com/h2zZhou/p/9072967.html
+//static std::string ComputeOrientation(vtkVector3<double> const& vector)
+//{
+//    std::cout << vector << '\n';
+//
+//    std::string orientation;
+//    orientation.reserve(3);
+//
+//    char orientationX = vector.GetX() < 0 ? 'R' : 'L';
+//    char orientationY = vector.GetY() < 0 ? 'A' : 'P';
+//    char orientationZ = vector.GetZ() < 0 ? 'F' : 'H';
+//
+//    double absX = fabs(vector.GetX());
+//    double absY = fabs(vector.GetY());
+//    double absZ = fabs(vector.GetZ());
+//
+//    for (auto i = 0; i < 3; i++)
+//        if (absX > .0001 && absX > absY && absX > absZ)
+//        {
+//            orientation += orientationX;
+//            absX = 0;
+//        }
+//        else if (absY > .0001 && absY > absX && absY > absZ)
+//        {
+//            orientation += orientationY;
+//            absY = 0;
+//        }
+//        else if (absZ > .0001 && absZ > absX && absZ > absY)
+//        {
+//            orientation += orientationZ;
+//            absZ = 0;
+//        }
+//        else
+//            break;
+//
+//    return orientation;
+//}
 
-    std::string orientation;
-    orientation.reserve(3);
-
-    char orientationX = vector.GetX() < 0 ? 'R' : 'L';
-    char orientationY = vector.GetY() < 0 ? 'A' : 'P';
-    char orientationZ = vector.GetZ() < 0 ? 'F' : 'H';
-
-    double absX = fabs(vector.GetX());
-    double absY = fabs(vector.GetY());
-    double absZ = fabs(vector.GetZ());
-
-    for (auto i = 0; i < 3; i++)
-        if (absX > .0001 && absX > absY && absX > absZ)
-        {
-            orientation += orientationX;
-            absX = 0;
-        }
-        else if (absY > .0001 && absY > absX && absY > absZ)
-        {
-            orientation += orientationY;
-            absY = 0;
-        }
-        else if (absZ > .0001 && absZ > absX && absZ > absY)
-        {
-            orientation += orientationZ;
-            absZ = 0;
-        }
-        else
-            break;
-
-    return orientation;
-}
-
-static std::vector<std::string_view> split(std::string_view sv, std::string_view delimeter = " ")
-{
-    std::vector<std::string_view> tokens{};
-    size_t pos = 0;
-    while ((pos = sv.find(delimeter)) != std::string_view::npos)
-    {
-        auto token = sv.substr(0, pos);
-        if (!token.empty()) tokens.push_back(token);
-        sv = sv.substr(pos + delimeter.size());
-    }
-    if (!sv.empty()) tokens.push_back(sv);
-    return tokens;
-}
-
-static std::pair<double, bool> parse_double(std::string_view sv)
-{
-    double x{};
-    if (std::from_chars(sv.data(), sv.data() + sv.size(), x).ec == std::errc{}) return std::make_pair(x, true);
-    return std::make_pair(x, false);
-}
-
-static vtkVector3<double> parse_3d(std::string const& data)
-{
-    vtkVector3<double> res{};
-    if (auto ns = split(data, "\\"); !ns.empty())
-        for (auto i = 0; i < 3; i++)
-            if (auto [x, ok] = parse_double(ns[i]); !ok)
-                std::cerr << "error to parse double from: " << ns[i] << '\n';
-            else
-                res[i] = x;
-    return res;
-}
+//static std::vector<std::string_view> split(std::string_view sv, std::string_view delimeter = " ")
+//{
+//    std::vector<std::string_view> tokens{};
+//    size_t pos = 0;
+//    while ((pos = sv.find(delimeter)) != std::string_view::npos)
+//    {
+//        auto token = sv.substr(0, pos);
+//        if (!token.empty()) tokens.push_back(token);
+//        sv = sv.substr(pos + delimeter.size());
+//    }
+//    if (!sv.empty()) tokens.push_back(sv);
+//    return tokens;
+//}
+//
+//static std::pair<double, bool> parse_double(std::string_view sv)
+//{
+//    double x{};
+//    if (std::from_chars(sv.data(), sv.data() + sv.size(), x).ec == std::errc{}) return std::make_pair(x, true);
+//    return std::make_pair(x, false);
+//}
+//
+//static vtkVector3<double> parse_3d(std::string const& data)
+//{
+//    vtkVector3<double> res{};
+//    if (auto ns = split(data, "\\"); !ns.empty())
+//        for (auto i = 0; i < 3; i++)
+//            if (auto [x, ok] = parse_double(ns[i]); !ok)
+//                std::cerr << "error to parse double from: " << ns[i] << '\n';
+//            else
+//                res[i] = x;
+//    return res;
+//}
 
 static vtkSmartPointer<vtkAnnotatedCubeActor> MakeAnnotatedCubeActor(vtkNamedColors* colors)
 {
     // A cube with labeled faces.
+    // LPS
     vtkNew<vtkAnnotatedCubeActor> cube;
-    cube->SetXPlusFaceText("R");  // Right
-    cube->SetXMinusFaceText("L"); // Left
-    cube->SetYPlusFaceText("A");  // Anterior
-    cube->SetYMinusFaceText("P"); // Posterior
+    cube->SetXPlusFaceText("L");  // Left
+    cube->SetXMinusFaceText("R"); // Right
+    cube->SetYPlusFaceText("P");  // Posterior
+    cube->SetYMinusFaceText("A"); // Anterior
     cube->SetZPlusFaceText("S");  // Superior/Cranial
     cube->SetZMinusFaceText("I"); // Inferior/Caudal
     cube->SetFaceTextScale(0.5);
@@ -125,6 +129,43 @@ static vtkSmartPointer<vtkAnnotatedCubeActor> MakeAnnotatedCubeActor(vtkNamedCol
     return cube;
 }
 
+static vtkSmartPointer<vtkAxesActor> MakeAxesActor(std::array<double, 3>& scale, std::array<std::string, 3>& xyzLabels)
+{
+    vtkNew<vtkAxesActor> axes;
+    axes->SetScale(scale[0], scale[1], scale[2]);
+    axes->SetShaftTypeToCylinder();
+    axes->SetXAxisLabelText(xyzLabels[0].c_str());
+    axes->SetYAxisLabelText(xyzLabels[1].c_str());
+    axes->SetZAxisLabelText(xyzLabels[2].c_str());
+    axes->SetCylinderRadius(0.5 * axes->GetCylinderRadius());
+    axes->SetConeRadius(1.025 * axes->GetConeRadius());
+    axes->SetSphereRadius(1.5 * axes->GetSphereRadius());
+    vtkTextProperty* tprop = axes->GetXAxisCaptionActor2D()->GetCaptionTextProperty();
+    tprop->ItalicOn();
+    tprop->ShadowOn();
+    tprop->SetFontFamilyToTimes();
+    // Use the same text properties on the other two axes.
+    axes->GetYAxisCaptionActor2D()->GetCaptionTextProperty()->ShallowCopy(tprop);
+    axes->GetZAxisCaptionActor2D()->GetCaptionTextProperty()->ShallowCopy(tprop);
+    return axes;
+}
+
+static vtkSmartPointer<vtkPropAssembly> MakeCubeActor(std::array<double, 3>& scale,
+                                                      std::array<std::string, 3>& xyzLabels, vtkNamedColors* colors)
+{
+    // We are combining a vtk.vtkAxesActor and a vtk.vtkAnnotatedCubeActor
+    // into a vtk.vtkPropAssembly
+    vtkSmartPointer<vtkAnnotatedCubeActor> cube = MakeAnnotatedCubeActor(colors);
+    vtkSmartPointer<vtkAxesActor> axes = MakeAxesActor(scale, xyzLabels);
+
+    // Combine orientation markers into one with an assembly.
+    vtkNew<vtkPropAssembly> assembly;
+    assembly->AddPart(axes);
+    assembly->AddPart(cube);
+    return assembly;
+}
+
+// https://examples.vtk.org/site/Cxx/VisualizationAlgorithms/AnatomicalOrientation/
 int main(int argc, char* argv[])
 {
     if (argc != 2)
@@ -161,6 +202,13 @@ int main(int argc, char* argv[])
     for (auto const& it : std::filesystem::directory_iterator(dicom_folder))
         dicom_img_paths->InsertValue(count++, it.path().string());
     dicom_sorter->SetInputFileNames(dicom_img_paths);
+    //! Set the ordering of the image rows in memory.
+    /*!
+     *  If the order is BottomUp (which is the default) then
+     *  the images will be flipped when they are read from disk.
+     *  The native orientation of DICOM images is top-to-bottom.
+     */
+    dicom_reader->SetMemoryRowOrderToFileNative();
     dicom_sorter->Update();
     dicom_reader->SetFileNames(dicom_sorter->GetFileNamesForSeries(0));
     dicom_reader->SetDataByteOrderToLittleEndian();
@@ -205,12 +253,14 @@ int main(int argc, char* argv[])
 
     // Dicom LPS coordinate system
     vtkNew<vtkNamedColors> colors;
-    auto annotated_cube_axis_actor = MakeAnnotatedCubeActor(colors);
-    vtkNew<vtkOrientationMarkerWidget> oriebtation_makrer_widget;
-    oriebtation_makrer_widget->SetOrientationMarker(annotated_cube_axis_actor);
-    oriebtation_makrer_widget->SetViewport(0, 0, 0.2, 0.2); // lower left in the viewport
-    oriebtation_makrer_widget->SetInteractor(interactor);
-    oriebtation_makrer_widget->On();
+    std::array<double, 3> scale{{1.5, 1.5, 1.5}};
+    std::array<std::string, 3> xyzLabels{{"X", "Y", "Z"}};
+    auto lps_actor = MakeCubeActor(scale, xyzLabels, colors);
+    vtkNew<vtkOrientationMarkerWidget> om_widget;
+    om_widget->SetOrientationMarker(lps_actor);
+    om_widget->SetViewport(0, 0, 0.2, 0.2); // lower left in the viewport
+    om_widget->SetInteractor(interactor);
+    om_widget->On();
 
     // plane widget
     vtkNew<vtkImagePlaneWidget> plane_widget;
@@ -259,7 +309,7 @@ int main(int argc, char* argv[])
     renderer->ResetCamera();
 
     interactor->Initialize();
-    oriebtation_makrer_widget->InteractiveOff();
+    om_widget->InteractiveOff();
     interactor->Start();
 
     return 0;
