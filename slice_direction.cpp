@@ -165,6 +165,47 @@ static vtkSmartPointer<vtkPropAssembly> MakeCubeActor(std::array<double, 3>& sca
     return assembly;
 }
 
+// https://examples.vtk.org/site/Cxx/Annotation/MultiLineText/
+vtkSmartPointer<vtkTextActor> CreateLabel(char pos, char const* input)
+{
+    constexpr int font_size = 18;
+    vtkNew<vtkTextActor> txt;
+    vtkTextProperty* txtprop = txt->GetTextProperty();
+    txtprop->SetFontFamilyToArial();
+    txtprop->BoldOn();
+    txtprop->SetFontSize(font_size);
+    txtprop->SetColor(1, 1, 1);
+    txt->SetInput(input);
+    txt->GetPositionCoordinate()->SetCoordinateSystemToNormalizedViewport();
+    switch (pos)
+    {
+    case 'L':
+        txt->GetPositionCoordinate()->SetValue(0, 0.5);
+        txtprop->SetJustificationToLeft();
+        txtprop->SetVerticalJustificationToCentered();
+        break;
+    case 'R':
+        txt->GetPositionCoordinate()->SetValue(1, 0.5);
+        txtprop->SetJustificationToRight();
+        txtprop->SetVerticalJustificationToCentered();
+        break;
+    case 'U':
+        txt->GetPositionCoordinate()->SetValue(0.5, 1);
+        txtprop->SetJustificationToCentered();
+        txtprop->SetVerticalJustificationToTop();
+        break;
+    case 'D':
+        txt->GetPositionCoordinate()->SetValue(0.5, 0);
+        txtprop->SetJustificationToCentered();
+        txtprop->SetVerticalJustificationToBottom();
+        break;
+
+    default:
+        break;
+    }
+    return txt;
+}
+
 // https://examples.vtk.org/site/Cxx/VisualizationAlgorithms/AnatomicalOrientation/
 int main(int argc, char* argv[])
 {
@@ -288,18 +329,9 @@ int main(int argc, char* argv[])
     renderer_plane->AddActor(plane_actor);
 
     // slice direction
-    // text actors' positions are in display coordinate
-    // TODO: use viewport pos
     // TODO: obtain orientation from plane widget slice
-    vtkNew<vtkTextActor> text_actor_left, text_actor_right, text_actor_up, text_actor_down;
-    text_actor_left->SetDisplayPosition(450, 400);
-    text_actor_left->SetInput("L");
-    text_actor_right->SetDisplayPosition(750, 400);
-    text_actor_right->SetInput("R");
-    text_actor_up->SetDisplayPosition(600, 600);
-    text_actor_up->SetInput("U");
-    text_actor_down->SetDisplayPosition(600, 200);
-    text_actor_down->SetInput("D");
+    auto text_actor_left = CreateLabel('L', "L"), text_actor_right = CreateLabel('R', "R"),
+         text_actor_up = CreateLabel('U', "U"), text_actor_down = CreateLabel('D', "D");
     renderer_plane->AddActor(text_actor_left);
     renderer_plane->AddActor(text_actor_right);
     renderer_plane->AddActor(text_actor_up);
