@@ -25,6 +25,10 @@
 #include <vtkRendererCollection.h>
 #include <vtkCameraOrientationWidget.h>
 #include <vtkCameraOrientationRepresentation.h>
+#include <vtkPointData.h>
+#include <vtkCellData.h>
+#include <vtkLine.h>
+#include <vtkColorTransferFunction.h>
 
 #include <iostream>
 #include <sstream>
@@ -168,24 +172,30 @@ public:
     {
         m_path_data = path_data;
         m_path_polydata = vtkSmartPointer<vtkPolyData>::New();
-        m_path_lines = vtkSmartPointer<vtkPolyLine>::New();
-        m_path_cells = vtkSmartPointer<vtkCellArray>::New();
 
-        m_path_lines->GetPointIds()->SetNumberOfIds(m_path_data->GetNumberOfPoints());
-        for (auto i = 0; i < m_path_data->GetNumberOfPoints(); i++)
-            m_path_lines->GetPointIds()->SetId(i, i);
-
-        m_path_cells->InsertNextCell(m_path_lines);
+        m_path_lines = vtkSmartPointer<vtkCellArray>::New();
+        m_path_lines->SetNumberOfCells(m_path_data->GetNumberOfPoints() - 1);
+        for (vtkIdType i = 0; i < m_path_data->GetNumberOfPoints() - 1; i++)
+        {
+            vtkNew<vtkLine> l;
+            l->GetPointIds()->SetId(0, i);
+            l->GetPointIds()->SetId(1, i + 1);
+            m_path_lines->InsertNextCell(l);
+        }
 
         m_path_polydata->SetPoints(m_path_data);
-        m_path_polydata->SetLines(m_path_cells);
+        m_path_polydata->SetLines(m_path_lines);
+
+        vtkNew<vtkUnsignedCharArray> colors;
+        colors->SetNumberOfComponents(3);
+        colors->SetNumberOfTuples(m_path_data->GetNumberOfPoints());
+        m_path_polydata->GetCellData()->SetScalars(colors);
 
         vtkNew<vtkPolyDataMapper> path_mapper;
         path_mapper->SetInputData(m_path_polydata);
+
         m_path_actor = vtkSmartPointer<vtkActor>::New();
         m_path_actor->SetMapper(path_mapper);
-        vtkNew<vtkNamedColors> colors;
-        m_path_actor->GetProperty()->SetColor(colors->GetColor3d("Blue").GetData());
         m_path_actor->GetProperty()->SetLineWidth(5);
 
         auto* renderer = Interactor->GetRenderWindow()->GetRenderers()->GetFirstRenderer();
@@ -202,22 +212,36 @@ protected:
     {
         // start from focal point (n + 1)
         auto N = m_path_data->GetNumberOfPoints() - n - 1;
-        m_path_lines->GetPointIds()->SetNumberOfIds(N);
-        for (auto i = 0; i < N; i++)
-            m_path_lines->GetPointIds()->SetId(i, n + 1 + i);
-        m_path_cells->Initialize();
-        m_path_cells->InsertNextCell(m_path_lines);
-        m_path_cells->Modified();
-        //m_path_polydata->Modified();
+        m_path_lines->Initialize();
+        m_path_lines->SetNumberOfCells(N - 1);
+        for (vtkIdType i = 0; i < N - 1; i++)
+        {
+            vtkNew<vtkLine> l;
+            l->GetPointIds()->SetId(0, i + n + 1);
+            l->GetPointIds()->SetId(1, i + n + 2);
+            m_path_lines->InsertNextCell(l);
+        }
 
-        //std::cout << m_path_lines->GetNumberOfPoints() << '\n';
+        auto colors = m_path_polydata->GetCellData()->GetScalars();
+        vtkNew<vtkColorTransferFunction> ctf;
+        ctf->AddRGBPoint(0, 0, 1, 0);
+        ctf->AddRGBPoint(N, 0, 0, 1);
+        double color[3]{};
+        for (auto i = 0; i < N; i++)
+        {
+            ctf->GetColor(i, color);
+            colors->InsertTuple3(i, 255 * color[0], 255 * color[1], 255 * color[2]);
+        }
+
+        colors->Modified();
+        m_path_lines->Modified();
+        m_path_polydata->Modified();
 
         myCameraMotionInteractorStyle::moveCameraToNthPos(n);
     }
 
     vtkSmartPointer<vtkPolyData> m_path_polydata{};
-    vtkSmartPointer<vtkCellArray> m_path_cells{};
-    vtkSmartPointer<vtkPolyLine> m_path_lines{};
+    vtkSmartPointer<vtkCellArray> m_path_lines{};
 
     vtkSmartPointer<vtkActor> m_path_actor{};
 };
