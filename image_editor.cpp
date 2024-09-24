@@ -24,6 +24,8 @@
 
 #include <vtkCamera.h>
 
+#include <vtkCallbackCommand.h>
+
 class MInteractorStyleImage: public vtkInteractorStyleImage
 {
 public:
@@ -137,6 +139,24 @@ private:
     vtkSmartPointer<vtkImageClip> m_clip_filter;
 };
 
+class MouseWheelCallback final: public vtkCallbackCommand
+{
+public:
+    static MouseWheelCallback* New() { return new MouseWheelCallback; }
+    vtkTypeMacro(MouseWheelCallback, vtkCallbackCommand);
+
+    void SetBorderWidget(vtkSmartPointer<vtkBorderWidget> border_widget) { m_border_widget = border_widget; }
+
+    void Execute(vtkObject* caller, unsigned long evId, void*) override
+    {
+        m_border_widget->InvokeEvent(vtkCommand::InteractionEvent);
+        m_border_widget->GetInteractor()->Render();
+    }
+
+private:
+    vtkSmartPointer<vtkBorderWidget> m_border_widget;
+};
+
 int main(int argc, char* argv[])
 {
     if (argc < 2)
@@ -235,6 +255,12 @@ int main(int argc, char* argv[])
     border_callback->SetClipFilter(image_clip);
 
     border_widget->AddObserver(vtkCommand::InteractionEvent, border_callback);
+
+    vtkNew<MouseWheelCallback> mouse_wheel_callback;
+    mouse_wheel_callback->SetBorderWidget(border_widget);
+
+    interactor->AddObserver(vtkCommand::MouseWheelForwardEvent, mouse_wheel_callback);
+    interactor->AddObserver(vtkCommand::MouseWheelBackwardEvent, mouse_wheel_callback);
 
     vtkNew<vtkRenderWindow> render_window;
     render_window->AddRenderer(left_renderer);
