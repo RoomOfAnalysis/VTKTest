@@ -102,6 +102,7 @@ build/
 
 # vscode
 .vscode
+.vs
 
 # sample data
 *.dcm

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.5)
 
 if(WIN32)
-    set(CMAKE_TOOLCHAIN_FILE "C:/vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE INTERNAL "" FORCE)
+    set(CMAKE_TOOLCHAIN_FILE "D:/vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE INTERNAL "" FORCE)
 endif()
 
 project(VTKTest VERSION 0.1 LANGUAGES CXX)
@@ -11,7 +11,7 @@ set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS ON CACHE INTERNAL "" FORCE)  # -Wno-dev
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if(WIN32)
-    set(DICOM_DIR "C:/vcpkg/installed/x64-windows/share/vtk-dicom/")
+    set(DICOM_DIR "D:/vcpkg/installed/x64-windows/share/vtk-dicom/")
 endif()
 
 find_package(VTK 9.2 REQUIRED)
@@ -45,3 +45,4 @@ add_exe(slice_direction)
 add_exe(viewer)
 add_exe(image_editor)
 add_exe(image_comparator)
+add_exe(ray_cast_mip)
