@@ -18,6 +18,11 @@ find_package(VTK 9.2 REQUIRED)
 find_package(DCMTK CONFIG REQUIRED)
 find_package(DICOM REQUIRED)
 
+# to support compressed dicom
+# build vtk-dicom with GDCM
+# https://dgobbi.github.io/vtk-dicom/doc/api/installation.html
+set(VTK_DICOM_LIBRARIES vtkDICOM)
+
 function(add_exe name)
 	add_executable(${name} ${name}.cpp)
     target_link_libraries(${name}
