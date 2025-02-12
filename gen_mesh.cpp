@@ -25,7 +25,7 @@
 
 //#define USE_DELAUNAY2D
 #define USE_EXTRACT_SURFACE
-//#define PLOT
+#define PLOT
 
 #ifdef PLOT
 #include <vtkPolyDataMapper.h>
@@ -43,6 +43,7 @@
 #include <vtkCubeAxesActor.h>
 #include <vtkTextProperty.h>
 #include <vtkPointData.h>
+#include <vtkTransformTextureCoords.h>
 #endif
 
 #include <chrono>
@@ -204,7 +205,14 @@ int main(int argc, char* argv[])
         std::cout << "Successfully Generate Surface Mesh" << std::endl;
 
 #ifdef PLOT
-        meshMapper->SetInputConnection(texturePlane->GetOutputPort());
+        // need flip R (inverted y)
+        // https://examples.vtk.org/site/VTKBook/08Chapter8/#Figure%208-10
+        vtkNew<vtkTransformTextureCoords> transformTextureCoords;
+        transformTextureCoords->SetInputConnection(texturePlane->GetOutputPort());
+        transformTextureCoords->SetFlipR(true);
+
+        //meshMapper->SetInputConnection(texturePlane->GetOutputPort());
+        meshMapper->SetInputConnection(transformTextureCoords->GetOutputPort());
         meshMapper->ScalarVisibilityOff();
 
         vtkNew<vtkImageReader2Factory> readerFactory;
